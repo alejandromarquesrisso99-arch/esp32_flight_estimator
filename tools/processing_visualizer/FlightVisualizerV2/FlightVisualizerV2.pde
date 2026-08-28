@@ -295,14 +295,15 @@ void draw3DVisualizer(float x, float y, float w, float h) {
   lights();
   ambientLight(90, 110, 140);
   directionalLight(230, 245, 255, -0.4, 0.9, -0.6);
-  directionalLight(60, 80, 110, 0.4, -0.9, 0.6);
-
   // 1. Reference Ground Grid Platform (Square grid in horizontal X-Z plane below the board)
   drawGroundReferenceGrid(160, 32, 110);
 
-  // 2. Apply Attitude Quaternion Matrix directly (100% Gimbal-Lock Free)
+  // 2. Apply Attitude Quaternion Matrix matching IMU axes to Processing 3D coordinates:
+  // IMU Y (Pitch) -> Processing X (Lateral tilt)
+  // IMU Z (Yaw)   -> Processing Y (Vertical turn)
+  // IMU X (Roll)  -> Processing Z (Longitudinal bank)
   pushMatrix();
-  applyQuaternionRotation(q0, q1, -q2, -q3);
+  applyQuaternionRotation(q0, q2, -q3, -q1);
 
   // 3. Render Clean Flat IMU Board / Box Model
   drawFlatBoardModel();
@@ -769,13 +770,13 @@ void handleReceivedPacket(int msgId, byte[] payload, int len) {
     currentUiState = UI_STATE_BIST_CALIBRATION;
   } else if (msgId == MSG_ESTIMATOR_TELEMETRY && len >= 74) {
     q0 = readFloatLE(payload, 4);
-    q1 = readFloatLE(payload, 8);
-    q2 = readFloatLE(payload, 12);
-    q3 = readFloatLE(payload, 16);
+    q1 = readFloatLE(payload, 8);  // IMU X (Roll)
+    q2 = readFloatLE(payload, 12); // IMU Y (Pitch)
+    q3 = readFloatLE(payload, 16); // IMU Z (Yaw)
 
-    rollDeg  = readFloatLE(payload, 20);
-    pitchDeg = readFloatLE(payload, 24);
-    yawDeg   = readFloatLE(payload, 28);
+    rollDeg  = readFloatLE(payload, 20); // Roll (Alabeo lateral)
+    pitchDeg = readFloatLE(payload, 24); // Pitch (Cabeceo morro)
+    yawDeg   = readFloatLE(payload, 28); // Yaw (Giro brújula / mesa)
 
     gyroDpsX = readFloatLE(payload, 32);
     gyroDpsY = readFloatLE(payload, 36);
@@ -784,6 +785,15 @@ void handleReceivedPacket(int msgId, byte[] payload, int len) {
     accelGX  = readFloatLE(payload, 44);
     accelGY  = readFloatLE(payload, 48);
     accelGZ  = readFloatLE(payload, 52);
+
+    wcetCycles = readUint32LE(payload, 56);
+    wcetUs     = readFloatLE(payload, 60);
+    loopFreqHz = readFloatLE(payload, 64);
+    healthFlags = readInt32LE(payload, 68);
+    espSystemState = payload[72] & 0xFF;
+    activeProfileId = payload[73] & 0xFF;
+
+    currentUiState = UI_STATE_RUNNING_ESTIMATOR;
 
     wcetCycles = readUint32LE(payload, 56);
     wcetUs     = readFloatLE(payload, 60);
