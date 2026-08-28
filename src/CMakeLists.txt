@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS 
+        "main.cpp"
+        "telemetry_task.cpp"
+        "gnc_task.cpp"
+        "fdir_manager.cpp"
+        "timer_watchdog.cpp"
+    INCLUDE_DIRS 
+        "."
+        "../include"
+    REQUIRES 
+        freertos 
+        driver 
+        esp_driver_i2c 
+        esp_driver_gptimer 
+        esp_hw_support 
+        esp_timer 
+        nvs_flash 
+        matrix 
+        ekf 
+        mpu6050
+)

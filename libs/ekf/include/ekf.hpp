@@ -29,7 +29,7 @@ public:
     ExtendedKalmanFilter();
 
     // Configura las matrices Q y R segun el perfil de vuelo seleccionado
-    void setProfile(FlightProfile profile);
+    void setProfile(flight::FlightProfileId profile);
 
     // Configura el comportamiento adaptativo de R
     void setAdaptiveR(bool enable, float alpha = 15.0f);

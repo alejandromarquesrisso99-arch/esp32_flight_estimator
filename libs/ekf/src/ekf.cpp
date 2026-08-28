@@ -15,40 +15,39 @@ ExtendedKalmanFilter::ExtendedKalmanFilter() {
     P = Matrix7f::identity() * 0.1f;
 
     // Configurar perfil por defecto (DRONE_HOVER)
-    setProfile(FlightProfile::DRONE_HOVER);
+    setProfile(flight::FlightProfileId::DRONE_HOVER);
 }
 
-void ExtendedKalmanFilter::setProfile(FlightProfile profile) {
+void ExtendedKalmanFilter::setProfile(flight::FlightProfileId profile) {
     float q_gyro = 0.001f;
     float q_bias = 0.00001f;
     float r_accel = 0.05f;
 
     switch (profile) {
-        case FlightProfile::DRONE_HOVER:
+        case flight::FlightProfileId::DRONE_HOVER:
             q_gyro  = 0.001f;
             q_bias  = 0.000001f;
             r_accel = 0.01f;
             adaptiveAlpha = 15.0f;
             break;
-        case FlightProfile::DRONE_ACRO:
+        case flight::FlightProfileId::DRONE_ACRO:
             q_gyro  = 0.005f;
             q_bias  = 0.0001f;
             r_accel = 0.50f;
             adaptiveAlpha = 25.0f;
             break;
-        case FlightProfile::ROCKET_LAUNCH:
+        case flight::FlightProfileId::ROCKET_LAUNCH:
             q_gyro  = 0.001f;
             q_bias  = 0.00001f;
             r_accel = 5.00f;
             adaptiveAlpha = 50.0f;
             break;
-        case FlightProfile::MISSILE_HIGH_G:
+        case flight::FlightProfileId::MISSILE_HIGH_G:
             q_gyro  = 0.010f;
             q_bias  = 0.0005f;
             r_accel = 2.00f;
             adaptiveAlpha = 40.0f;
             break;
-        case FlightProfile::CUSTOM:
         default:
             q_gyro  = 0.001f;
             q_bias  = 0.00001f;
@@ -135,7 +134,7 @@ void ExtendedKalmanFilter::update(const Vector3f& accel) {
     // 2. Calculo de R dinamica adaptativa ante aceleraciones no gravitatorias (G-Gating)
     if (useAdaptiveR) {
         // En el sistema bare-metal, las lecturas del acelerómetro siempre se expresan en m/s^2 (SI)
-        constexpr float gRef = PhysicsConstants::GRAVITY_MSS;
+        constexpr float gRef = flight::PhysicsConstants::GRAVITY_MSS;
         float gError = std::fabs(aNorm - gRef) / gRef; // Error relativo respecto a 1g
         float scaleFactor = 1.0f + adaptiveAlpha * (gError * gError);
         R = R_base * scaleFactor;

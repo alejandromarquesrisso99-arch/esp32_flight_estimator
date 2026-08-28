@@ -1,0 +1,25 @@
+# ESP-IDF Configuration Defaults for High-Integrity Attitude Estimator
+
+# FreeRTOS 1000 Hz Tick Rate (1ms resolution)
+CONFIG_FREERTOS_HZ=1000
+
+# CPU Frequency 240 MHz
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
+
+# Compiler Optimization for Performance (-O2)
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# Disable C++ Exceptions & RTTI for Deterministic Hard Real-Time
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# Main Task Stack Size
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Watchdog configuration
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
+
+# Log configuration
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

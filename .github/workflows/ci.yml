@@ -1,0 +1,43 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  host-unit-tests:
+    name: Host Unit Tests (PC)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up CMake and Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Configure and Build Unit Tests
+        run: |
+          cmake -B build_test -S test
+          cmake --build build_test --config Release
+
+      - name: Execute Unit Tests
+        run: |
+          ./build_test/test_telemetry
+
+  esp32-firmware-build:
+    name: ESP-IDF Build (ESP32)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ESP-IDF Build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3.1
+          target: esp32
+          path: '.'
