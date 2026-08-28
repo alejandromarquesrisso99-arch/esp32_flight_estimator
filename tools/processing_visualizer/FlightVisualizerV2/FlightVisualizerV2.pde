@@ -300,12 +300,9 @@ void draw3DVisualizer(float x, float y, float w, float h) {
   // 1. Reference Ground Grid Platform (Square grid in horizontal X-Z plane below the board)
   drawGroundReferenceGrid(160, 32, 110);
 
-  // 2. Apply Attitude Euler Rotations from Estimator
+  // 2. Apply Attitude Quaternion Matrix directly (100% Gimbal-Lock Free)
   pushMatrix();
-  // Standard Aerospace Euler Transformation:
-  rotateY(radians(-yawDeg));     // Yaw around vertical axis
-  rotateX(radians(-pitchDeg));   // Pitch around lateral axis (Inverted)
-  rotateZ(radians(-rollDeg));    // Roll around longitudinal axis
+  applyQuaternionRotation(q0, q1, -q2, -q3);
 
   // 3. Render Clean Flat IMU Board / Box Model
   drawFlatBoardModel();
@@ -827,4 +824,23 @@ int readInt32LE(byte[] b, int offset) {
 float readFloatLE(byte[] b, int offset) {
   int intBits = readInt32LE(b, offset);
   return Float.intBitsToFloat(intBits);
+}
+
+void applyQuaternionRotation(float w, float x, float y, float z) {
+  // Normalize quaternion for safe rendering
+  float norm = sqrt(w*w + x*x + y*y + z*z);
+  if (norm < 1e-6f) return;
+  w /= norm; x /= norm; y /= norm; z /= norm;
+
+  // Convert quaternion to standard 3D rotation matrix
+  float xx = x * x, yy = y * y, zz = z * z;
+  float xy = x * y, xz = x * z, yz = y * z;
+  float wx = w * x, wy = w * y, wz = w * z;
+
+  applyMatrix(
+    1.0f - 2.0f * (yy + zz),  2.0f * (xy - wz),        2.0f * (xz + wy),        0.0f,
+    2.0f * (xy + wz),         1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx),        0.0f,
+    2.0f * (xz - wy),         2.0f * (yz + wx),        1.0f - 2.0f * (xx + yy), 0.0f,
+    0.0f,                     0.0f,                    0.0f,                    1.0f
+  );
 }
