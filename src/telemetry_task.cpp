@@ -35,6 +35,75 @@ static protocol::Packet<protocol::PayloadAckNack>    s_ack_packet;
 static protocol::Packet<protocol::PayloadBistReport> s_bist_packet;
 static protocol::Packet<protocol::PayloadTelemetry>  s_telem_packet;
 
+// Static attitude quaternion state for smooth 3D estimation without Euler singularities
+static float    s_q[4]           = {1.0f, 0.0f, 0.0f, 0.0f}; // [w, x, y, z]
+static uint64_t s_last_update_us = 0;
+
+static void update_attitude_filter(const drivers::InertialScaledData& scaled) {
+    uint64_t now_us = esp_timer_get_time();
+    if (s_last_update_us == 0) {
+        s_last_update_us = now_us;
+        return;
+    }
+    float dt = static_cast<float>(now_us - s_last_update_us) * 1e-6f;
+    s_last_update_us = now_us;
+    if (dt <= 0.0f || dt > 0.1f) dt = 0.020f;
+
+    // Gyro rates in rad/s
+    float gx = scaled.gyro_rads[0];
+    float gy = scaled.gyro_rads[1];
+    float gz = scaled.gyro_rads[2];
+
+    // Accelerometer measurement
+    float ax = scaled.accel_g[0];
+    float ay = scaled.accel_g[1];
+    float az = scaled.accel_g[2];
+    float a_norm = std::sqrt(ax * ax + ay * ay + az * az);
+
+    // Normalize accel if valid (rejection of high-G impacts)
+    if (a_norm > 0.5f && a_norm < 1.5f) {
+        ax /= a_norm;
+        ay /= a_norm;
+        az /= a_norm;
+
+        // Estimated gravity direction in body frame from quaternion
+        float vx = 2.0f * (s_q[1] * s_q[3] - s_q[0] * s_q[2]);
+        float vy = 2.0f * (s_q[0] * s_q[1] + s_q[2] * s_q[3]);
+        float vz = s_q[0] * s_q[0] - s_q[1] * s_q[1] - s_q[2] * s_q[2] + s_q[3] * s_q[3];
+
+        // Error is cross product between measured gravity and estimated gravity
+        float ex = (ay * vz - az * vy);
+        float ey = (az * vx - ax * vz);
+        float ez = (ax * vy - ay * vx);
+
+        // Feedback correction gain (Kp)
+        const float Kp = 2.0f;
+        gx += Kp * ex;
+        gy += Kp * ey;
+        gz += Kp * ez;
+    }
+
+    // Integrate quaternion derivative: q_dot = 0.5 * q * w
+    float q0_dot = 0.5f * (-s_q[1] * gx - s_q[2] * gy - s_q[3] * gz);
+    float q1_dot = 0.5f * ( s_q[0] * gx + s_q[2] * gz - s_q[3] * gy);
+    float q2_dot = 0.5f * ( s_q[0] * gy - s_q[1] * gz + s_q[3] * gx);
+    float q3_dot = 0.5f * ( s_q[0] * gz + s_q[1] * gy - s_q[2] * gx);
+
+    s_q[0] += q0_dot * dt;
+    s_q[1] += q1_dot * dt;
+    s_q[2] += q2_dot * dt;
+    s_q[3] += q3_dot * dt;
+
+    // Normalize quaternion
+    float q_norm = std::sqrt(s_q[0]*s_q[0] + s_q[1]*s_q[1] + s_q[2]*s_q[2] + s_q[3]*s_q[3]);
+    if (q_norm > 1e-6f) {
+        s_q[0] /= q_norm;
+        s_q[1] /= q_norm;
+        s_q[2] /= q_norm;
+        s_q[3] /= q_norm;
+    }
+}
+
 // UART RX Parser State Machine
 enum class RxState {
     WAIT_PREAMBLE_0,
@@ -313,6 +382,10 @@ void telemetry_task_run(void* pvParameters) {
                 const auto& calib = drivers::MPU6050Driver::get_calibration();
                 telemetry_send_bist_report(static_cast<uint8_t>(BistCode::OK), 100, calib.gyro_bias_rads, calib.accel_bias_mss);
 
+                // Reset filter state
+                s_q[0] = 1.0f; s_q[1] = 0.0f; s_q[2] = 0.0f; s_q[3] = 0.0f;
+                s_last_update_us = 0;
+
                 g_health_flags |= (HEALTH_FLAG_IMU_OK | HEALTH_FLAG_BIST_PASSED | HEALTH_FLAG_EKF_CONVERGED);
                 g_system_state = SystemState::RUNNING_ESTIMATOR;
                 ESP_LOGI(TAG, "Sensor calibration complete! Transitioned to RUNNING_ESTIMATOR");
@@ -329,31 +402,37 @@ void telemetry_task_run(void* pvParameters) {
 
                     uart_send_raw(&s_telem_packet, sizeof(s_telem_packet));
                 } else {
-                    // Direct sensor sampling for Phase 2 telemetry validation
+                    // Direct sensor sampling & quaternion fusion for Phase 2 validation
                     drivers::InertialRawData raw{};
                     drivers::InertialScaledData scaled{};
                     if (drivers::MPU6050Driver::read_burst_raw(raw) == ESP_OK) {
                         drivers::MPU6050Driver::scale_data(raw, scaled);
+                        update_attitude_filter(scaled);
 
-                        // Direct Euler calculation from gravity vector
-                        float roll = std::atan2(scaled.accel_g[1], scaled.accel_g[2]) * PhysicsConstants::RAD_TO_DEG;
-                        float pitch = std::atan2(-scaled.accel_g[0], 
-                                                 std::sqrt(scaled.accel_g[1]*scaled.accel_g[1] + scaled.accel_g[2]*scaled.accel_g[2])) * PhysicsConstants::RAD_TO_DEG;
+                        // Extract Euler angles from quaternion with Singularity / Gimbal-Lock Guard
+                        float sin_pitch = 2.0f * (s_q[0] * s_q[2] - s_q[3] * s_q[1]);
+                        if (sin_pitch > 1.0f)  sin_pitch = 1.0f;
+                        if (sin_pitch < -1.0f) sin_pitch = -1.0f;
+                        float pitch = std::asin(sin_pitch) * PhysicsConstants::RAD_TO_DEG;
 
-                        float r = (roll * PhysicsConstants::DEG_TO_RAD) * 0.5f;
-                        float p = (pitch * PhysicsConstants::DEG_TO_RAD) * 0.5f;
-                        float cr = std::cos(r), sr = std::sin(r);
-                        float cp = std::cos(p), sp = std::sin(p);
+                        float roll = 0.0f;
+                        if (std::abs(sin_pitch) < 0.995f) {
+                            roll = std::atan2(2.0f * (s_q[0] * s_q[1] + s_q[2] * s_q[3]),
+                                              1.0f - 2.0f * (s_q[1] * s_q[1] + s_q[2] * s_q[2])) * PhysicsConstants::RAD_TO_DEG;
+                        }
+
+                        float yaw = std::atan2(2.0f * (s_q[0] * s_q[3] + s_q[1] * s_q[2]),
+                                               1.0f - 2.0f * (s_q[2] * s_q[2] + s_q[3] * s_q[3])) * PhysicsConstants::RAD_TO_DEG;
 
                         protocol::init_packet(s_telem_packet, protocol::MsgId::ESTIMATOR_TELEMETRY);
                         s_telem_packet.payload.timestamp_us      = static_cast<uint32_t>(esp_timer_get_time());
-                        s_telem_packet.payload.q[0]              = cr * cp;
-                        s_telem_packet.payload.q[1]              = sr * cp;
-                        s_telem_packet.payload.q[2]              = cr * sp;
-                        s_telem_packet.payload.q[3]              = -sr * sp;
+                        s_telem_packet.payload.q[0]              = s_q[0];
+                        s_telem_packet.payload.q[1]              = s_q[1];
+                        s_telem_packet.payload.q[2]              = s_q[2];
+                        s_telem_packet.payload.q[3]              = s_q[3];
                         s_telem_packet.payload.euler_deg[0]      = roll;
                         s_telem_packet.payload.euler_deg[1]      = pitch;
-                        s_telem_packet.payload.euler_deg[2]      = 0.0f;
+                        s_telem_packet.payload.euler_deg[2]      = yaw;
                         s_telem_packet.payload.gyro_dps[0]       = scaled.gyro_dps[0];
                         s_telem_packet.payload.gyro_dps[1]       = scaled.gyro_dps[1];
                         s_telem_packet.payload.gyro_dps[2]       = scaled.gyro_dps[2];
@@ -370,7 +449,7 @@ void telemetry_task_run(void* pvParameters) {
 
                         uart_send_raw(&s_telem_packet, sizeof(s_telem_packet));
                     }
-                    vTaskDelay(pdMS_TO_TICKS(25)); // ~40 Hz transmission rate
+                    vTaskDelay(pdMS_TO_TICKS(20)); // 50 Hz transmission rate
                 }
                 break;
             }
