@@ -17,6 +17,9 @@ compile_commands.json
 # Obsidian notes
 .obsidian/
 
+# Processing temp files
+*.autosave
+
 # OS files
 .DS_Store
 Thumbs.db

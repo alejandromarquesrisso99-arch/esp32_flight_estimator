@@ -5,7 +5,7 @@
  * Features:
  * - Handshake and profile selection FSM (Screen 1)
  * - Calibration and BIST monitoring (Screen 2)
- * - 3D Attitude Quaternion Visualizer + Hard Real-Time Dashboard (Screen 3)
+ * - Flat 3D Board Attitude Visualizer with Reference Grid (Screen 3)
  * - Strict Fletcher-16 Checksum validation on all binary frames
  * - Interactive DEMO / Simulation Mode (Press 'D') for offline testing
  */
@@ -78,17 +78,17 @@ int rxBufIdx = 0;
 int rxChkLow = 0;
 
 void settings() {
-  size(1100, 720, P3D);
+  size(1120, 740, P3D);
 }
 
 void setup() {
-  surface.setTitle("High-Integrity Flight Estimator V2 Ground Station");
+  surface.setTitle("High-Integrity Flight Estimator V2 - Ground Station");
   textFont(createFont("Consolas", 14));
   frameRate(60);
 }
 
 void draw() {
-  background(18, 24, 32);
+  background(15, 20, 28);
   
   // Read and process serial stream if connected
   processSerial();
@@ -122,6 +122,8 @@ void draw() {
 // -------------------------------------------------------------
 
 void drawPortSelectionScreen() {
+  hint(DISABLE_DEPTH_TEST);
+  
   fill(0, 200, 255);
   textSize(24);
   textAlign(CENTER, TOP);
@@ -174,6 +176,8 @@ void drawPortSelectionScreen() {
 }
 
 void drawProfileSelectionScreen() {
+  hint(DISABLE_DEPTH_TEST);
+
   fill(0, 220, 255);
   textSize(22);
   textAlign(CENTER, TOP);
@@ -225,6 +229,8 @@ void drawProfileCard(int id, String name, String freq, String gyro, String accel
 }
 
 void drawBistScreen() {
+  hint(DISABLE_DEPTH_TEST);
+
   fill(0, 220, 255);
   textSize(22);
   textAlign(CENTER, TOP);
@@ -255,82 +261,164 @@ void drawBistScreen() {
 }
 
 void drawDashboardScreen() {
-  // Left: 3D Visualization viewport
-  draw3DVisualizer(40, 40, 520, 640);
+  // 1. Draw 3D Attitude Visualizer (Left Panel)
+  draw3DVisualizer(30, 35, 540, 670);
 
-  // Right: Telemetry metrics & gauges
-  drawTelemetryPanel(580, 40, 480, 640);
+  // 2. Draw 2D Telemetry & Health Gauges (Right Panel)
+  drawTelemetryPanel(600, 35, 490, 670);
 }
 
+// -------------------------------------------------------------
+// 3D FLAT BOARD ATTITUDE VISUALIZER
+// -------------------------------------------------------------
+
 void draw3DVisualizer(float x, float y, float w, float h) {
-  fill(14, 20, 28);
-  stroke(40, 65, 90);
-  strokeWeight(1);
+  // Step 1: Draw panel background in 2D
+  hint(DISABLE_DEPTH_TEST);
+  fill(12, 18, 26);
+  stroke(35, 60, 85);
+  strokeWeight(1.5);
   rect(x, y, w, h, 8);
 
+  // Step 2: Render 3D Scene with Depth Testing
+  hint(ENABLE_DEPTH_TEST);
   pushMatrix();
-  translate(x + w/2, y + h/2, 0);
 
-  // Apply attitude quaternion rotation (convert NED/body to Processing coordinate system)
-  applyQuaternionRotation(q0, q1, q2, q3);
+  // Center 3D viewport
+  translate(x + w/2, y + h/2 + 25, 0);
 
-  // Draw 3D drone/vehicle frame
-  strokeWeight(2);
-  // Body frame axes
-  stroke(255, 50, 50); line(0, 0, 0, 120, 0, 0);    // X axis (Red - Forward)
-  stroke(50, 255, 50); line(0, 0, 0, 0, 120, 0);    // Y axis (Green - Right)
-  stroke(50, 100, 255); line(0, 0, 0, 0, 0, 120);   // Z axis (Blue - Down)
+  // True Mathematical Isometric Spatial Projection (Viewed from FRONT-TOP diagonal)
+  rotateX(-atan(1.0f / sqrt(2.0f))); // Exact -35.264°: elevated above
+  rotateY(radians(135));              // 135°: facing the FRONT-RIGHT of the board
 
-  // Central fuselage
-  fill(40, 70, 100);
-  stroke(0, 200, 255);
-  box(90, 45, 18);
+  // Dynamic 3D lighting
+  lights();
+  ambientLight(90, 110, 140);
+  directionalLight(230, 245, 255, -0.4, 0.9, -0.6);
+  directionalLight(60, 80, 110, 0.4, -0.9, 0.6);
 
-  // Quadcopter arms
-  stroke(200, 220, 240);
-  strokeWeight(3);
-  line(-70, -70, 0, 70, 70, 0);
-  line(-70, 70, 0, 70, -70, 0);
+  // 1. Reference Ground Grid Platform (Square grid in horizontal X-Z plane below the board)
+  drawGroundReferenceGrid(160, 32, 110);
 
-  // Rotors
-  noStroke();
-  fill(0, 220, 255, 180);
-  pushMatrix(); translate(-70, -70, 0); ellipse(0, 0, 36, 36); popMatrix();
-  pushMatrix(); translate(70, 70, 0); ellipse(0, 0, 36, 36); popMatrix();
-  fill(255, 120, 0, 180);
-  pushMatrix(); translate(-70, 70, 0); ellipse(0, 0, 36, 36); popMatrix();
-  pushMatrix(); translate(70, -70, 0); ellipse(0, 0, 36, 36); popMatrix();
+  // 2. Apply Attitude Euler Rotations from Estimator
+  pushMatrix();
+  // Standard Aerospace Euler Transformation:
+  rotateY(radians(-yawDeg));     // Yaw around vertical axis
+  rotateX(radians(-pitchDeg));   // Pitch around lateral axis (Inverted)
+  rotateZ(radians(-rollDeg));    // Roll around longitudinal axis
+
+  // 3. Render Clean Flat IMU Board / Box Model
+  drawFlatBoardModel();
 
   popMatrix();
+  popMatrix();
 
-  // Euler angles overlay on 3D viewport
+  // Step 3: Draw 2D HUD overlays on top
+  hint(DISABLE_DEPTH_TEST);
+
   fill(0, 220, 255);
-  textSize(14);
+  textSize(16);
   textAlign(LEFT, TOP);
-  text("ROLL:  " + nf(rollDeg, 1, 2) + " deg", x + 15, y + 15);
-  text("PITCH: " + nf(pitchDeg, 1, 2) + " deg", x + 15, y + 35);
-  text("YAW:   " + nf(yawDeg, 1, 2) + " deg", x + 15, y + 55);
+  text("3D ATTITUDE ESTIMATOR (IMU BOARD)", x + 20, y + 18);
+
+  // Euler Attitude HUD Box
+  fill(20, 35, 50, 220);
+  stroke(0, 200, 255, 120);
+  strokeWeight(1);
+  rect(x + 15, y + 50, 220, 82, 6);
+
+  fill(0, 220, 255);
+  textSize(13);
+  textAlign(LEFT, TOP);
+  text("ROLL:  " + nf(rollDeg, 1, 2) + " deg", x + 25, y + 58);
+  text("PITCH: " + nf(pitchDeg, 1, 2) + " deg", x + 25, y + 78);
+  text("YAW:   " + nf(yawDeg, 1, 2) + " deg", x + 25, y + 98);
 
   if (isDemoMode) {
     fill(0, 255, 180);
     textAlign(RIGHT, TOP);
-    text("[DEMO SIMULATION ACTIVE]", x + w - 15, y + 15);
+    text("[DEMO SIMULATION]", x + w - 20, y + 20);
   }
 }
 
-void drawTelemetryPanel(float x, float y, float w, float h) {
-  fill(14, 20, 28);
-  stroke(40, 65, 90);
+void drawGroundReferenceGrid(float size, float step, float yOffset) {
+  pushMatrix();
+  translate(0, yOffset, 0); // Position below the board in 3D
+
+  // Draw grid lines in X-Z plane
   strokeWeight(1);
+  for (float i = -size; i <= size + 0.1f; i += step) {
+    // Longitudinal lines (along Z)
+    stroke(0, 180, 255, (abs(i) < 0.1f) ? 140 : 45);
+    line(i, 0, -size, i, 0, size);
+
+    // Lateral lines (along X)
+    stroke(0, 180, 255, (abs(i) < 0.1f) ? 140 : 45);
+    line(-size, 0, i, size, 0, i);
+  }
+
+  // Outer border of square platform
+  stroke(0, 220, 255, 120);
+  strokeWeight(1.5);
+  line(-size, 0, -size, size, 0, -size);
+  line(size, 0, -size, size, 0, size);
+  line(size, 0, size, -size, 0, size);
+  line(-size, 0, size, -size, 0, -size);
+
+  // Central cardinal axis lines on the floor
+  strokeWeight(2.5);
+  stroke(255, 70, 70, 200); line(0, 0, 0, 0, 0, -size); // Forward (-Z)
+  stroke(70, 255, 70, 200); line(0, 0, 0, size, 0, 0);  // Right (+X)
+
+  popMatrix();
+}
+
+void drawFlatBoardModel() {
+  // 1. 3D Body Frame Coordinate Axes
+  strokeWeight(3);
+  stroke(255, 50, 50); line(0, 0, 0, 0, 0, -110);  // X / Forward (Red)
+  stroke(50, 255, 50); line(0, 0, 0, 110, 0, 0);   // Y / Right (Green)
+  stroke(50, 100, 255); line(0, 0, 0, 0, 60, 0);   // Z / Down (Blue)
+
+  // 2. Main Flat PCB Board Box (Width X = 190, Height Y = 14, Length Z = 130)
+  fill(25, 45, 75);
+  stroke(0, 220, 255);
+  strokeWeight(1.5);
+  box(190, 14, 130);
+
+  // 3. Sensor IC Chip in center (Black square with pin-1 dot)
+  fill(20, 20, 25);
+  stroke(100, 140, 180);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, -8, 0);
+  box(36, 4, 36);
+  popMatrix();
+
+  // 4. Front Heading Indicator (Bright Orange/Red forward strip)
+  fill(255, 110, 0);
+  noStroke();
+  pushMatrix();
+  translate(0, -8, -60);
+  box(60, 4, 10);
+  popMatrix();
+}
+
+void drawTelemetryPanel(float x, float y, float w, float h) {
+  hint(DISABLE_DEPTH_TEST);
+
+  fill(12, 18, 26);
+  stroke(35, 60, 85);
+  strokeWeight(1.5);
   rect(x, y, w, h, 8);
 
   fill(0, 220, 255);
   textSize(18);
   textAlign(LEFT, TOP);
-  text("HARD REAL-TIME DASHBOARD", x + 20, y + 20);
+  text("HARD REAL-TIME DASHBOARD", x + 20, y + 18);
 
   // Performance Section
-  fill(30, 48, 68);
+  fill(25, 40, 58);
   noStroke();
   rect(x + 20, y + 55, w - 40, 130, 6);
 
@@ -342,7 +430,7 @@ void drawTelemetryPanel(float x, float y, float w, float h) {
   text("Active Flight Profile:  Profile " + activeProfileId, x + 35, y + 145);
 
   // Inertial Data Section
-  fill(30, 48, 68);
+  fill(25, 40, 58);
   rect(x + 20, y + 200, w - 40, 140, 6);
 
   fill(255);
@@ -356,7 +444,7 @@ void drawTelemetryPanel(float x, float y, float w, float h) {
   text("Ax: " + nf(accelGX, 1, 3) + "   Ay: " + nf(accelGY, 1, 3) + "   Az: " + nf(accelGZ, 1, 3), x + 50, y + 300);
 
   // Health Flags Matrix
-  fill(30, 48, 68);
+  fill(25, 40, 58);
   rect(x + 20, y + 355, w - 40, 180, 6);
 
   fill(255);
@@ -391,6 +479,7 @@ void drawStatusLed(String label, boolean active, float x, float y) {
 }
 
 void drawHardFaultScreen() {
+  hint(DISABLE_DEPTH_TEST);
   fill(255, 50, 50);
   textSize(24);
   textAlign(CENTER, TOP);
@@ -738,18 +827,4 @@ int readInt32LE(byte[] b, int offset) {
 float readFloatLE(byte[] b, int offset) {
   int intBits = readInt32LE(b, offset);
   return Float.intBitsToFloat(intBits);
-}
-
-void applyQuaternionRotation(float w, float x, float y, float z) {
-  // Convert quaternion to rotation matrix and apply to Processing modelview
-  float xx = x * x, yy = y * y, zz = z * z;
-  float xy = x * y, xz = x * z, yz = y * z;
-  float wx = w * x, wy = w * y, wz = w * z;
-
-  applyMatrix(
-    1.0f - 2.0f * (yy + zz), 2.0f * (xy - wz),        2.0f * (xz + wy),        0.0f,
-    2.0f * (xy + wz),        1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx),        0.0f,
-    2.0f * (xz - wy),        2.0f * (yz + wx),        1.0f - 2.0f * (xx + yy), 0.0f,
-    0.0f,                    0.0f,                    0.0f,                    1.0f
-  );
 }
