@@ -1,0 +1,19 @@
+# Build directories
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# IDE / Editor
+.vscode/
+.idea/
+.clangd/
+compile_commands.json
+
+# Obsidian notes
+.obsidian/
+
+# OS files
+.DS_Store
+Thumbs.db
