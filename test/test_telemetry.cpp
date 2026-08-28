@@ -153,6 +153,40 @@ void test_flight_profiles() {
     std::cout << "  -> Flight profiles static parameters validated." << std::endl;
 }
 
+void test_drdy_and_timer_watchdog() {
+    std::cout << "[TEST] Checking DRDY and GPTimer watchdog timeout calculations..." << std::endl;
+
+    // Verify 1.5 * T_sample timeout formulas for each flight profile
+    const auto* p1 = get_profile_config(FlightProfileId::DRONE_HOVER);
+    uint32_t t1_sample = 1000000UL / p1->rate_hz;
+    uint32_t t1_timeout = (t1_sample * 3) / 2;
+    assert(p1->rate_hz == 200);
+    assert(t1_sample == 5000);
+    assert(t1_timeout == 7500); // 7.5ms timeout for 200Hz
+
+    const auto* p2 = get_profile_config(FlightProfileId::DRONE_ACRO);
+    uint32_t t2_sample = 1000000UL / p2->rate_hz;
+    uint32_t t2_timeout = (t2_sample * 3) / 2;
+    assert(p2->rate_hz == 500);
+    assert(t2_sample == 2000);
+    assert(t2_timeout == 3000); // 3.0ms timeout for 500Hz
+
+    const auto* p4 = get_profile_config(FlightProfileId::MISSILE_HIGH_G);
+    uint32_t t4_sample = 1000000UL / p4->rate_hz;
+    uint32_t t4_timeout = (t4_sample * 3) / 2;
+    assert(p4->rate_hz == 1000);
+    assert(t4_sample == 1000);
+    assert(t4_timeout == 1500); // 1.5ms timeout for 1000Hz (Hard 1ms Loop)
+
+    // Verify FDIR Health Flags bitmask
+    uint32_t flags = HEALTH_FLAG_NONE;
+    assert((flags & HEALTH_FLAG_TIMER_FALLBACK_ACTIVE) == 0);
+    flags |= HEALTH_FLAG_TIMER_FALLBACK_ACTIVE;
+    assert((flags & HEALTH_FLAG_TIMER_FALLBACK_ACTIVE) != 0);
+
+    std::cout << "  -> DRDY & GPTimer timeout and FDIR flags validated." << std::endl;
+}
+
 int main() {
     std::cout << "============================================" << std::endl;
     std::cout << "  Running Flight Telemetry Unit Tests (PC)  " << std::endl;
@@ -163,7 +197,9 @@ int main() {
     test_telemetry_packet_roundtrip();
     test_fsm_transitions();
     test_flight_profiles();
+    test_drdy_and_timer_watchdog();
 
     std::cout << "\n>>> ALL TELEMETRY TESTS PASSED SUCCESSFULLY! <<<\n" << std::endl;
     return 0;
 }
+
