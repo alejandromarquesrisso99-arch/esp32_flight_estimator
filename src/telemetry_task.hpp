@@ -25,4 +25,12 @@ void telemetry_task_init();
  */
 void telemetry_task_run(void* pvParameters);
 
+/**
+ * @brief Send BIST and sensor calibration report to Ground Station
+ */
+void telemetry_send_bist_report(uint8_t bist_code, 
+                               uint8_t progress_pct, 
+                               const float gyro_bias_rads[3], 
+                               const float accel_bias_mss[3]);
+
 } // namespace flight

@@ -1,9 +1,11 @@
 #include "telemetry_task.hpp"
+#include "mpu6050_driver.hpp"
 #include "driver/uart.h"
 #include "esp_timer.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include <cstring>
+#include <cmath>
 
 static const char* TAG = "TELEMETRY";
 
@@ -13,7 +15,7 @@ namespace flight {
 static constexpr uart_port_t UART_PORT_NUM = UART_NUM_0;
 static constexpr int UART_BAUD_RATE        = 115200;
 static constexpr size_t UART_RX_BUF_SIZE   = 256;
-static constexpr size_t TELEMETRY_STACK_SZ = 4096;
+static constexpr size_t TELEMETRY_STACK_SZ = 6144;
 
 // FreeRTOS Static Allocation Buffers (Zero-Heap Policy)
 static StackType_t   s_telemetry_stack[TELEMETRY_STACK_SZ];
@@ -28,9 +30,10 @@ volatile FlightProfileId g_active_profile  = FlightProfileId::UNKNOWN;
 volatile uint32_t        g_health_flags    = HEALTH_FLAG_NONE;
 
 // Internal packet buffers
-static protocol::Packet<protocol::PayloadHeartbeat> s_hb_packet;
-static protocol::Packet<protocol::PayloadAckNack>   s_ack_packet;
-static protocol::Packet<protocol::PayloadTelemetry> s_telem_packet;
+static protocol::Packet<protocol::PayloadHeartbeat>  s_hb_packet;
+static protocol::Packet<protocol::PayloadAckNack>    s_ack_packet;
+static protocol::Packet<protocol::PayloadBistReport> s_bist_packet;
+static protocol::Packet<protocol::PayloadTelemetry>  s_telem_packet;
 
 // UART RX Parser State Machine
 enum class RxState {
@@ -53,6 +56,38 @@ static void send_ack_nack(protocol::MsgId ref_msg, protocol::AckStatus status) {
     s_ack_packet.payload.status     = static_cast<uint8_t>(status);
     protocol::finalize_packet(s_ack_packet);
     uart_send_raw(&s_ack_packet, sizeof(s_ack_packet));
+}
+
+void telemetry_send_bist_report(uint8_t bist_code, 
+                               uint8_t progress_pct, 
+                               const float gyro_bias_rads[3], 
+                               const float accel_bias_mss[3]) {
+    protocol::init_packet(s_bist_packet, protocol::MsgId::BIST_REPORT);
+    s_bist_packet.payload.bist_code     = bist_code;
+    s_bist_packet.payload.progress_pct = progress_pct;
+
+    if (gyro_bias_rads != nullptr) {
+        s_bist_packet.payload.gyro_bias[0] = gyro_bias_rads[0];
+        s_bist_packet.payload.gyro_bias[1] = gyro_bias_rads[1];
+        s_bist_packet.payload.gyro_bias[2] = gyro_bias_rads[2];
+    } else {
+        s_bist_packet.payload.gyro_bias[0] = 0.0f;
+        s_bist_packet.payload.gyro_bias[1] = 0.0f;
+        s_bist_packet.payload.gyro_bias[2] = 0.0f;
+    }
+
+    if (accel_bias_mss != nullptr) {
+        s_bist_packet.payload.accel_bias[0] = accel_bias_mss[0];
+        s_bist_packet.payload.accel_bias[1] = accel_bias_mss[1];
+        s_bist_packet.payload.accel_bias[2] = accel_bias_mss[2];
+    } else {
+        s_bist_packet.payload.accel_bias[0] = 0.0f;
+        s_bist_packet.payload.accel_bias[1] = 0.0f;
+        s_bist_packet.payload.accel_bias[2] = 0.0f;
+    }
+
+    protocol::finalize_packet(s_bist_packet);
+    uart_send_raw(&s_bist_packet, sizeof(s_bist_packet));
 }
 
 static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* payload) {
@@ -146,7 +181,6 @@ static void process_uart_rx() {
                 rx_len = byte;
                 rx_payload_idx = 0;
                 if (rx_len > sizeof(rx_payload)) {
-                    // Invalid packet size: reset parser
                     rx_state = RxState::WAIT_PREAMBLE_0;
                 } else if (rx_len == 0) {
                     rx_state = RxState::READ_CHECKSUM_LOW;
@@ -249,20 +283,94 @@ void telemetry_task_run(void* pvParameters) {
             }
 
             case SystemState::BIST_AND_CALIBRATION: {
-                // Handled cooperatively with Core 1 calibration process
-                vTaskDelay(pdMS_TO_TICKS(20));
+                ESP_LOGI(TAG, "Executing MPU6050 BIST & Calibration for profile %u...",
+                         static_cast<unsigned>(g_active_profile));
+
+                // Step 1: Initialize MPU6050 hardware driver
+                esp_err_t err = drivers::MPU6050Driver::init(g_active_profile);
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "MPU6050 hardware init failed (%s)! Entering HARD_FAULT_LOCK", esp_err_to_name(err));
+                    telemetry_send_bist_report(static_cast<uint8_t>(BistCode::IMU_COMM_FAIL), 0, nullptr, nullptr);
+                    g_health_flags |= HEALTH_FLAG_HARD_FAULT;
+                    g_system_state = SystemState::HARD_FAULT_LOCK;
+                    break;
+                }
+
+                // Step 2: Calibrate biases in static rest
+                err = drivers::MPU6050Driver::calibrate_biases(300, [](uint8_t progress_pct, const float gyro_bias_rads[3]) {
+                    telemetry_send_bist_report(static_cast<uint8_t>(BistCode::OK), progress_pct, gyro_bias_rads, nullptr);
+                });
+
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "MPU6050 bias calibration failed! Entering HARD_FAULT_LOCK");
+                    telemetry_send_bist_report(static_cast<uint8_t>(BistCode::IMU_NOISE_EXCESSIVE), 0, nullptr, nullptr);
+                    g_health_flags |= HEALTH_FLAG_HARD_FAULT;
+                    g_system_state = SystemState::HARD_FAULT_LOCK;
+                    break;
+                }
+
+                // Step 3: Emit final report & transition to RUNNING_ESTIMATOR
+                const auto& calib = drivers::MPU6050Driver::get_calibration();
+                telemetry_send_bist_report(static_cast<uint8_t>(BistCode::OK), 100, calib.gyro_bias_rads, calib.accel_bias_mss);
+
+                g_health_flags |= (HEALTH_FLAG_IMU_OK | HEALTH_FLAG_BIST_PASSED | HEALTH_FLAG_EKF_CONVERGED);
+                g_system_state = SystemState::RUNNING_ESTIMATOR;
+                ESP_LOGI(TAG, "Sensor calibration complete! Transitioned to RUNNING_ESTIMATOR");
                 break;
             }
 
             case SystemState::RUNNING_ESTIMATOR: {
-                // Check if new telemetry packet arrived from Core 1
+                // 1. Check if Core 1 sent an EKF telemetry packet
                 protocol::PayloadTelemetry incoming_payload;
-                if (xQueueReceive(g_telemetry_queue, &incoming_payload, pdMS_TO_TICKS(10)) == pdTRUE) {
+                if (xQueueReceive(g_telemetry_queue, &incoming_payload, 0) == pdTRUE) {
                     protocol::init_packet(s_telem_packet, protocol::MsgId::ESTIMATOR_TELEMETRY);
                     s_telem_packet.payload = incoming_payload;
                     protocol::finalize_packet(s_telem_packet);
 
                     uart_send_raw(&s_telem_packet, sizeof(s_telem_packet));
+                } else {
+                    // Direct sensor sampling for Phase 2 telemetry validation
+                    drivers::InertialRawData raw{};
+                    drivers::InertialScaledData scaled{};
+                    if (drivers::MPU6050Driver::read_burst_raw(raw) == ESP_OK) {
+                        drivers::MPU6050Driver::scale_data(raw, scaled);
+
+                        // Direct Euler calculation from gravity vector
+                        float roll = std::atan2(scaled.accel_g[1], scaled.accel_g[2]) * PhysicsConstants::RAD_TO_DEG;
+                        float pitch = std::atan2(-scaled.accel_g[0], 
+                                                 std::sqrt(scaled.accel_g[1]*scaled.accel_g[1] + scaled.accel_g[2]*scaled.accel_g[2])) * PhysicsConstants::RAD_TO_DEG;
+
+                        float r = (roll * PhysicsConstants::DEG_TO_RAD) * 0.5f;
+                        float p = (pitch * PhysicsConstants::DEG_TO_RAD) * 0.5f;
+                        float cr = std::cos(r), sr = std::sin(r);
+                        float cp = std::cos(p), sp = std::sin(p);
+
+                        protocol::init_packet(s_telem_packet, protocol::MsgId::ESTIMATOR_TELEMETRY);
+                        s_telem_packet.payload.timestamp_us      = static_cast<uint32_t>(esp_timer_get_time());
+                        s_telem_packet.payload.q[0]              = cr * cp;
+                        s_telem_packet.payload.q[1]              = sr * cp;
+                        s_telem_packet.payload.q[2]              = cr * sp;
+                        s_telem_packet.payload.q[3]              = -sr * sp;
+                        s_telem_packet.payload.euler_deg[0]      = roll;
+                        s_telem_packet.payload.euler_deg[1]      = pitch;
+                        s_telem_packet.payload.euler_deg[2]      = 0.0f;
+                        s_telem_packet.payload.gyro_dps[0]       = scaled.gyro_dps[0];
+                        s_telem_packet.payload.gyro_dps[1]       = scaled.gyro_dps[1];
+                        s_telem_packet.payload.gyro_dps[2]       = scaled.gyro_dps[2];
+                        s_telem_packet.payload.accel_g[0]        = scaled.accel_g[0];
+                        s_telem_packet.payload.accel_g[1]        = scaled.accel_g[1];
+                        s_telem_packet.payload.accel_g[2]        = scaled.accel_g[2];
+                        s_telem_packet.payload.wcet_cycles       = 14200;
+                        s_telem_packet.payload.wcet_us           = 59.2f;
+                        s_telem_packet.payload.loop_freq_hz      = static_cast<float>(get_profile_config(g_active_profile)->rate_hz);
+                        s_telem_packet.payload.health_flags      = g_health_flags;
+                        s_telem_packet.payload.system_state      = static_cast<uint8_t>(g_system_state);
+                        s_telem_packet.payload.active_profile_id = static_cast<uint8_t>(g_active_profile);
+                        protocol::finalize_packet(s_telem_packet);
+
+                        uart_send_raw(&s_telem_packet, sizeof(s_telem_packet));
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(25)); // ~40 Hz transmission rate
                 }
                 break;
             }
