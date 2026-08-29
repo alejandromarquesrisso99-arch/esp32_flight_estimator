@@ -53,7 +53,7 @@ inline constexpr FlightProfileConfig PROFILES[] = {
         2,            // DLPF ~98 Hz
         0.001f,       // Q gyro
         0.050f,       // R accel
-        1.35f         // High-G threshold (g)
+        0.35f         // High-G threshold (g)
     },
     {
         FlightProfileId::DRONE_ACRO,
@@ -66,7 +66,7 @@ inline constexpr FlightProfileConfig PROFILES[] = {
         1,            // DLPF ~188 Hz
         0.005f,       // Q gyro
         0.150f,       // R accel
-        2.50f         // High-G threshold (g)
+        1.50f         // High-G threshold (g)
     },
     {
         FlightProfileId::ROCKET_LAUNCH,

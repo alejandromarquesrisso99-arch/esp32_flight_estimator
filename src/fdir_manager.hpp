@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include "safety_types.hpp"
 #include "flight_profiles.hpp"
 #include "mpu6050_driver.hpp"
@@ -26,7 +27,7 @@ public:
      * @param health_flags Output/in-out health flags bitmask
      * @return true if sample is safe to process, false if corrupted
      */
-    static bool process_sample(const drivers::InertialScaledData& scaled, float dt, volatile uint32_t& health_flags);
+    static bool process_sample(const drivers::InertialScaledData& scaled, float dt, std::atomic<uint32_t>& health_flags);
 
     /**
      * @brief Evaluate whether the accelerometer gravity measurement should be fused into the EKF
@@ -34,14 +35,14 @@ public:
      * @param health_flags Output health flags bitmask
      * @return true if gravity vector is valid (accelerometer within nominal G-window)
      */
-    static bool should_fuse_accelerometer(const drivers::InertialScaledData& scaled, volatile uint32_t& health_flags);
+    static bool should_fuse_accelerometer(const drivers::InertialScaledData& scaled, std::atomic<uint32_t>& health_flags);
 
     /**
      * @brief Register an I2C communication error event
      * @param health_flags Output health flags bitmask
      * @return true if threshold exceeded (requires HARD_FAULT_LOCK transition)
      */
-    static bool register_i2c_error(volatile uint32_t& health_flags);
+    static bool register_i2c_error(std::atomic<uint32_t>& health_flags);
 
     /**
      * @brief Register a successful I2C communication event (resets error counter)

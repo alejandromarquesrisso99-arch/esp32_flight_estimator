@@ -22,7 +22,7 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(ret);
 
     // 2. Set initial system state to AWAITING_PROFILE
-    flight::g_health_flags = flight::HEALTH_FLAG_TELEMETRY_STREAMING;
+    flight::g_health_flags.store(flight::HEALTH_FLAG_TELEMETRY_STREAMING, std::memory_order_relaxed);
     flight::g_system_state = flight::SystemState::AWAITING_PROFILE;
 
     ESP_LOGI(TAG, "System State: %s (Waiting for Ground Station Profile Handshake)",

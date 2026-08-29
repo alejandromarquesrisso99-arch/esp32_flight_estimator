@@ -28,7 +28,7 @@ static StaticQueue_t s_queue_struct;
 QueueHandle_t           g_telemetry_queue = nullptr;
 volatile SystemState     g_system_state    = SystemState::UNINITIALIZED;
 volatile FlightProfileId g_active_profile  = FlightProfileId::UNKNOWN;
-volatile uint32_t        g_health_flags    = HEALTH_FLAG_NONE;
+std::atomic<uint32_t>    g_health_flags{HEALTH_FLAG_NONE};
 
 // Internal packet buffers
 static protocol::Packet<protocol::PayloadHeartbeat>  s_hb_packet;
@@ -274,7 +274,7 @@ void telemetry_task_run(void* pvParameters) {
                     protocol::init_packet(s_hb_packet, protocol::MsgId::HEARTBEAT_AWAIT_PROFILE);
                     s_hb_packet.payload.uptime_ms    = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
                     s_hb_packet.payload.system_state = static_cast<uint8_t>(g_system_state);
-                    s_hb_packet.payload.health_flags = g_health_flags;
+                    s_hb_packet.payload.health_flags = g_health_flags.load(std::memory_order_relaxed);
                     protocol::finalize_packet(s_hb_packet);
 
                     uart_send_raw(&s_hb_packet, sizeof(s_hb_packet));
@@ -292,7 +292,7 @@ void telemetry_task_run(void* pvParameters) {
                 if (err != ESP_OK) {
                     ESP_LOGE(TAG, "MPU6050 hardware init failed (%s)! Entering HARD_FAULT_LOCK", esp_err_to_name(err));
                     telemetry_send_bist_report(static_cast<uint8_t>(BistCode::IMU_COMM_FAIL), 0, nullptr, nullptr);
-                    g_health_flags |= HEALTH_FLAG_HARD_FAULT;
+                    g_health_flags.fetch_or(HEALTH_FLAG_HARD_FAULT, std::memory_order_relaxed);
                     g_system_state = SystemState::HARD_FAULT_LOCK;
                     break;
                 }
@@ -305,7 +305,7 @@ void telemetry_task_run(void* pvParameters) {
                 if (err != ESP_OK) {
                     ESP_LOGE(TAG, "MPU6050 bias calibration failed! Entering HARD_FAULT_LOCK");
                     telemetry_send_bist_report(static_cast<uint8_t>(BistCode::IMU_NOISE_EXCESSIVE), 0, nullptr, nullptr);
-                    g_health_flags |= HEALTH_FLAG_HARD_FAULT;
+                    g_health_flags.fetch_or(HEALTH_FLAG_HARD_FAULT, std::memory_order_relaxed);
                     g_system_state = SystemState::HARD_FAULT_LOCK;
                     break;
                 }
@@ -314,7 +314,7 @@ void telemetry_task_run(void* pvParameters) {
                 const auto& calib = drivers::MPU6050Driver::get_calibration();
                 telemetry_send_bist_report(static_cast<uint8_t>(BistCode::OK), 100, calib.gyro_bias_rads, calib.accel_bias_mss);
 
-                g_health_flags |= (HEALTH_FLAG_IMU_OK | HEALTH_FLAG_BIST_PASSED | HEALTH_FLAG_EKF_CONVERGED);
+                g_health_flags.fetch_or(HEALTH_FLAG_IMU_OK | HEALTH_FLAG_BIST_PASSED | HEALTH_FLAG_EKF_CONVERGED, std::memory_order_relaxed);
                 g_system_state = SystemState::RUNNING_ESTIMATOR;
                 ESP_LOGI(TAG, "Sensor calibration complete! Transitioned to RUNNING_ESTIMATOR");
 

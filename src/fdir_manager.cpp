@@ -26,7 +26,7 @@ void FDIRManager::init(FlightProfileId profile) {
              get_profile_config(profile)->name);
 }
 
-bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, float dt, volatile uint32_t& health_flags) {
+bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, float dt, std::atomic<uint32_t>& health_flags) {
     const auto* p_cfg = get_profile_config(s_active_profile);
     if (p_cfg == nullptr) {
         return false;
@@ -42,7 +42,7 @@ bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, floa
     float max_allowed_dps = static_cast<float>(p_cfg->gyro_fs_dps) * 1.05f;
     if (gyro_mag_dps > max_allowed_dps || std::isnan(gyro_mag_dps) || std::isinf(gyro_mag_dps)) {
         s_anomaly_count = s_anomaly_count + 1;
-        health_flags |= HEALTH_FLAG_ANOMALY_DETECTED;
+        health_flags.fetch_or(HEALTH_FLAG_ANOMALY_DETECTED, std::memory_order_relaxed);
         sample_valid = false;
     }
 
@@ -50,13 +50,13 @@ bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, floa
     float nominal_dt = (p_cfg->rate_hz > 0) ? (1.0f / p_cfg->rate_hz) : 0.005f;
     if (dt > 2.0f * nominal_dt || dt < 0.2f * nominal_dt) {
         s_jitter_warning_count = s_jitter_warning_count + 1;
-        health_flags |= HEALTH_FLAG_ANOMALY_DETECTED;
+        health_flags.fetch_or(HEALTH_FLAG_ANOMALY_DETECTED, std::memory_order_relaxed);
     }
 
     return sample_valid;
 }
 
-bool FDIRManager::should_fuse_accelerometer(const drivers::InertialScaledData& scaled, volatile uint32_t& health_flags) {
+bool FDIRManager::should_fuse_accelerometer(const drivers::InertialScaledData& scaled, std::atomic<uint32_t>& health_flags) {
     const auto* p_cfg = get_profile_config(s_active_profile);
     if (p_cfg == nullptr) {
         return false;
@@ -68,7 +68,7 @@ bool FDIRManager::should_fuse_accelerometer(const drivers::InertialScaledData& s
 
     // Check for NaN or Inf
     if (std::isnan(accel_mag_g) || std::isinf(accel_mag_g) || accel_mag_g < 0.1f) {
-        health_flags |= HEALTH_FLAG_HIGH_G_REJECTION;
+        health_flags.fetch_or(HEALTH_FLAG_HIGH_G_REJECTION, std::memory_order_relaxed);
         return false;
     }
 
@@ -76,23 +76,23 @@ bool FDIRManager::should_fuse_accelerometer(const drivers::InertialScaledData& s
     float g_error = std::abs(accel_mag_g - 1.0f);
     if (g_error >= p_cfg->high_g_threshold_g) {
         s_high_g_event_count = s_high_g_event_count + 1;
-        health_flags |= HEALTH_FLAG_HIGH_G_REJECTION;
+        health_flags.fetch_or(HEALTH_FLAG_HIGH_G_REJECTION, std::memory_order_relaxed);
         return false; // Decouple accelerometer from EKF
     }
 
     // Measurement is within safe gravitational envelope
-    health_flags &= ~HEALTH_FLAG_HIGH_G_REJECTION;
+    health_flags.fetch_and(~static_cast<uint32_t>(HEALTH_FLAG_HIGH_G_REJECTION), std::memory_order_relaxed);
     return true;
 }
 
-bool FDIRManager::register_i2c_error(volatile uint32_t& health_flags) {
+bool FDIRManager::register_i2c_error(std::atomic<uint32_t>& health_flags) {
     s_consecutive_i2c_errors = s_consecutive_i2c_errors + 1;
-    health_flags &= ~HEALTH_FLAG_IMU_OK;
+    health_flags.fetch_and(~static_cast<uint32_t>(HEALTH_FLAG_IMU_OK), std::memory_order_relaxed);
 
     if (s_consecutive_i2c_errors >= MAX_CONSECUTIVE_I2C_ERRORS) {
         ESP_LOGE(TAG, "CRITICAL: %u consecutive I2C bus read failures! Declaring HARD_FAULT",
                  static_cast<unsigned>(s_consecutive_i2c_errors));
-        health_flags |= HEALTH_FLAG_HARD_FAULT;
+        health_flags.fetch_or(HEALTH_FLAG_HARD_FAULT, std::memory_order_relaxed);
         return true; // Require state transition to HARD_FAULT_LOCK
     }
 

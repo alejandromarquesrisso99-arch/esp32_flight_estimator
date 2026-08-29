@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -13,7 +14,7 @@ extern QueueHandle_t g_telemetry_queue;
 // Global system state & active profile
 extern volatile SystemState     g_system_state;
 extern volatile FlightProfileId g_active_profile;
-extern volatile uint32_t        g_health_flags;
+extern std::atomic<uint32_t>    g_health_flags;
 
 /**
  * @brief Initialize static resources for telemetry task on Core 0

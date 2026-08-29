@@ -193,7 +193,7 @@ void test_fdir_manager() {
     std::cout << "[TEST] Validating FDIR Manager (High-G gating, rate limits, I2C fault isolation)..." << std::endl;
 
     FDIRManager::init(FlightProfileId::DRONE_HOVER);
-    uint32_t health_flags = HEALTH_FLAG_NONE;
+    std::atomic<uint32_t> health_flags{HEALTH_FLAG_NONE};
 
     // 1. Test Nominal Gravitational Envelope (1.0g)
     drivers::InertialScaledData nominal_data{};
@@ -206,47 +206,47 @@ void test_fdir_manager() {
 
     bool can_fuse = FDIRManager::should_fuse_accelerometer(nominal_data, health_flags);
     assert(can_fuse == true);
-    assert((health_flags & HEALTH_FLAG_HIGH_G_REJECTION) == 0);
+    assert((health_flags.load() & HEALTH_FLAG_HIGH_G_REJECTION) == 0);
 
-    // 2. Test High-G Shock Rejection (e.g. 3.0g bump in HOVER profile where threshold is 0.3g)
+    // 2. Test High-G Shock Rejection (e.g. 1.5g in HOVER profile where threshold is 0.35g -> error = 0.5g > 0.35g)
     drivers::InertialScaledData shock_data{};
-    shock_data.accel_g[0] = 1.5f;
-    shock_data.accel_g[1] = 2.0f;
-    shock_data.accel_g[2] = 1.8f; // ~3.08g magnitude
+    shock_data.accel_g[0] = 0.0f;
+    shock_data.accel_g[1] = 0.0f;
+    shock_data.accel_g[2] = 1.5f; // 1.5g magnitude -> |1.5 - 1.0| = 0.5g > 0.35g
 
     can_fuse = FDIRManager::should_fuse_accelerometer(shock_data, health_flags);
     assert(can_fuse == false);
-    assert((health_flags & HEALTH_FLAG_HIGH_G_REJECTION) != 0);
+    assert((health_flags.load() & HEALTH_FLAG_HIGH_G_REJECTION) != 0);
     assert(FDIRManager::get_high_g_event_count() == 1);
 
     // Recovery from High-G
     can_fuse = FDIRManager::should_fuse_accelerometer(nominal_data, health_flags);
     assert(can_fuse == true);
-    assert((health_flags & HEALTH_FLAG_HIGH_G_REJECTION) == 0);
+    assert((health_flags.load() & HEALTH_FLAG_HIGH_G_REJECTION) == 0);
 
     // 3. Test Gyro Rate Limits & Anomaly Detection
     drivers::InertialScaledData extreme_rate_data{};
     extreme_rate_data.gyro_dps[0] = 500.0f; // Exceeds DRONE_HOVER 250 dps full scale
     bool sample_safe = FDIRManager::process_sample(extreme_rate_data, 0.005f, health_flags);
     assert(sample_safe == false);
-    assert((health_flags & HEALTH_FLAG_ANOMALY_DETECTED) != 0);
+    assert((health_flags.load() & HEALTH_FLAG_ANOMALY_DETECTED) != 0);
     assert(FDIRManager::get_anomaly_count() == 1);
 
     // 4. Test I2C Bus Fault Isolation (5 consecutive errors -> HARD_FAULT)
-    health_flags = HEALTH_FLAG_IMU_OK;
+    health_flags.store(HEALTH_FLAG_IMU_OK);
     FDIRManager::reset_diagnostics();
 
     for (int i = 1; i <= 4; ++i) {
         bool declare_hard_fault = FDIRManager::register_i2c_error(health_flags);
         assert(declare_hard_fault == false);
         assert(FDIRManager::get_consecutive_i2c_errors() == static_cast<uint32_t>(i));
-        assert((health_flags & HEALTH_FLAG_HARD_FAULT) == 0);
+        assert((health_flags.load() & HEALTH_FLAG_HARD_FAULT) == 0);
     }
 
     // 5th error triggers HARD_FAULT declaration
     bool declare_hard_fault = FDIRManager::register_i2c_error(health_flags);
     assert(declare_hard_fault == true);
-    assert((health_flags & HEALTH_FLAG_HARD_FAULT) != 0);
+    assert((health_flags.load() & HEALTH_FLAG_HARD_FAULT) != 0);
 
     // Recovery on valid communication
     FDIRManager::register_i2c_success();

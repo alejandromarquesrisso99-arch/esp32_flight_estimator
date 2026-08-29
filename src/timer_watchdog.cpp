@@ -29,7 +29,7 @@ static bool IRAM_ATTR timer_watchdog_on_alarm_cb(gptimer_handle_t timer,
     s_timeout_count = s_timeout_count + 1;
 
     // Mark system health flag: DRDY missed, operating on hardware timer fallback
-    g_health_flags |= HEALTH_FLAG_TIMER_FALLBACK_ACTIVE;
+    g_health_flags.fetch_or(HEALTH_FLAG_TIMER_FALLBACK_ACTIVE, std::memory_order_relaxed);
 
     if (s_target_task != nullptr) {
         vTaskNotifyGiveFromISR(s_target_task, &high_task_wakeup);

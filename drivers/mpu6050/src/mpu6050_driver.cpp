@@ -188,10 +188,10 @@ esp_err_t MPU6050Driver::read_burst_raw(InertialRawData& raw) {
 }
 
 void MPU6050Driver::scale_data(const InertialRawData& raw, InertialScaledData& scaled) {
-    // 1. Accelerometer scaling
-    scaled.accel_g[0] = static_cast<float>(raw.accel[0]) * s_accel_scale_to_g;
-    scaled.accel_g[1] = static_cast<float>(raw.accel[1]) * s_accel_scale_to_g;
-    scaled.accel_g[2] = static_cast<float>(raw.accel[2]) * s_accel_scale_to_g;
+    // 1. Accelerometer scaling (subtract calibrated static offsets)
+    scaled.accel_g[0] = (static_cast<float>(raw.accel[0]) * s_accel_scale_to_g) - s_calibration.accel_bias_g[0];
+    scaled.accel_g[1] = (static_cast<float>(raw.accel[1]) * s_accel_scale_to_g) - s_calibration.accel_bias_g[1];
+    scaled.accel_g[2] = (static_cast<float>(raw.accel[2]) * s_accel_scale_to_g) - s_calibration.accel_bias_g[2];
 
     scaled.accel_mss[0] = scaled.accel_g[0] * PhysicsConstants::GRAVITY_MSS;
     scaled.accel_mss[1] = scaled.accel_g[1] * PhysicsConstants::GRAVITY_MSS;

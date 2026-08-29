@@ -794,15 +794,6 @@ void handleReceivedPacket(int msgId, byte[] payload, int len) {
     activeProfileId = payload[73] & 0xFF;
 
     currentUiState = UI_STATE_RUNNING_ESTIMATOR;
-
-    wcetCycles = readUint32LE(payload, 56);
-    wcetUs     = readFloatLE(payload, 60);
-    loopFreqHz = readFloatLE(payload, 64);
-    healthFlags = readInt32LE(payload, 68);
-    espSystemState = payload[72] & 0xFF;
-    activeProfileId = payload[73] & 0xFF;
-
-    currentUiState = UI_STATE_RUNNING_ESTIMATOR;
   } else if (msgId == MSG_ACK_NACK && len >= 2) {
     int refMsg = payload[0] & 0xFF;
     int status = payload[1] & 0xFF;

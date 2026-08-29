@@ -97,7 +97,7 @@ void gnc_task_run(void* pvParameters) {
         }
 
         FDIRManager::register_i2c_success();
-        g_health_flags |= HEALTH_FLAG_IMU_OK;
+        g_health_flags.fetch_or(HEALTH_FLAG_IMU_OK, std::memory_order_relaxed);
 
         // Scale data and subtract calibrated gyro biases
         drivers::MPU6050Driver::scale_data(raw, scaled);
@@ -132,7 +132,7 @@ void gnc_task_run(void* pvParameters) {
         }
 
         uint32_t cycle_end = esp_cpu_get_cycle_count();
-        uint32_t elapsed_cycles = (cycle_end >= cycle_start) ? (cycle_end - cycle_start) : 0;
+        uint32_t elapsed_cycles = cycle_end - cycle_start;
         if (elapsed_cycles > s_max_wcet_cycles) {
             s_max_wcet_cycles = elapsed_cycles;
         }
@@ -177,7 +177,7 @@ void gnc_task_run(void* pvParameters) {
             payload.wcet_cycles       = s_max_wcet_cycles;
             payload.wcet_us           = static_cast<float>(s_max_wcet_cycles) / 240.0f;
             payload.loop_freq_hz      = s_loop_freq_hz;
-            payload.health_flags      = g_health_flags;
+            payload.health_flags      = g_health_flags.load(std::memory_order_relaxed);
             payload.system_state      = static_cast<uint8_t>(g_system_state);
             payload.active_profile_id = static_cast<uint8_t>(g_active_profile);
 

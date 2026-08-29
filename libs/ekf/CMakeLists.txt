@@ -9,7 +9,7 @@ else()
     add_library(ekf STATIC src/ekf.cpp)
     target_include_directories(ekf PUBLIC 
         include
-        /../../include
+        ../../include
     )
     target_link_libraries(ekf PUBLIC matrix)
 endif()

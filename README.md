@@ -65,8 +65,8 @@ flowchart TD
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **`0x01`** | `DRONE_HOVER` | **200 Hz** | $\pm 250^\circ/\text{s}$ | $\pm 2g$ | 98 Hz | $0.35g$ | Camera drones, smooth positioning |
 | **`0x02`** | `DRONE_ACRO` | **500 Hz** | $\pm 1000^\circ/\text{s}$ | $\pm 8g$ | 188 Hz | $1.50g$ | Acrobatic FPV, aggressive maneuvers |
-| **`0x03`** | `ROCKET_LAUNCH` | **500 Hz** | $\pm 500^\circ/\text{s}$ | $\pm 16g$ | 188 Hz | $5.00g$ | Sounding rockets, vertical ascent |
-| **`0x04`** | `MISSILE_HIGH_G`| **1000 Hz**| $\pm 2000^\circ/\text{s}$| $\pm 16g$ | 256 Hz | $3.00g$ | High-speed interceptors, 1ms loop |
+| **`0x03`** | `ROCKET_LAUNCH` | **500 Hz** | $\pm 1000^\circ/\text{s}$ | $\pm 16g$ | 188 Hz | $3.00g$ | Sounding rockets, vertical ascent |
+| **`0x04`** | `MISSILE_HIGH_G`| **1000 Hz**| $\pm 2000^\circ/\text{s}$| $\pm 16g$ | 256 Hz | $5.00g$ | High-speed interceptors, 1ms loop |
 
 ---
 
