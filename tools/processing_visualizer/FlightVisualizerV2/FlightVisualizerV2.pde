@@ -1474,6 +1474,49 @@ String formatSignedFloat(float val, int digits, int decimals) {
   return sign + nf(absVal, digits, decimals);
 }
 
+float getProfileMaxGyroDps(int profileId) {
+  switch (profileId) {
+    case 1: return 250.0f;
+    case 2: return 1000.0f;
+    case 3: return 1000.0f;
+    case 4: return 2000.0f;
+    default: return 250.0f;
+  }
+}
+
+float getProfileMaxAccelG(int profileId) {
+  switch (profileId) {
+    case 1: return 2.0f;
+    case 2: return 8.0f;
+    case 3: return 16.0f;
+    case 4: return 16.0f;
+    default: return 2.0f;
+  }
+}
+
+color getDynamicTelemetryColor(float val, float maxLimit) {
+  float ratio = constrain(abs(val) / maxLimit, 0.0f, 1.0f);
+  // Gradiente suave de 3 zonas:
+  // 0.0 a 0.50: Verde brillante (40, 255, 130) -> Amarillo (255, 220, 35)
+  // 0.50 a 1.0: Amarillo (255, 220, 35) -> Rojo de advertencia maxima (255, 45, 55)
+  if (ratio < 0.5f) {
+    float t = ratio / 0.5f;
+    return lerpColor(color(40, 255, 130), color(255, 220, 35), t);
+  } else {
+    float t = (ratio - 0.5f) / 0.5f;
+    return lerpColor(color(255, 220, 35), color(255, 45, 55), t);
+  }
+}
+
+void drawMiniGaugeBar(float val, float maxLimit, float xPos, float yPos, float barW, float barH) {
+  float ratio = constrain(abs(val) / maxLimit, 0.0f, 1.0f);
+  fill(25, 35, 48);
+  noStroke();
+  rect(xPos, yPos, barW, barH, 2);
+  fill(getDynamicTelemetryColor(val, maxLimit));
+  rect(xPos, yPos, max(2.0f, barW * ratio), barH, 2);
+}
+
 void drawTelemetryPanel(float x, float y, float w, float h) {
   hint(DISABLE_DEPTH_TEST);
 
@@ -1499,24 +1542,43 @@ void drawTelemetryPanel(float x, float y, float w, float h) {
   text("Paquetes RX / Errores:  " + rxPacketCount + " / " + checksumErrors, x + 35, y + 120);
   text("Perfil de Vuelo Activo: Perfil " + activeProfileId, x + 35, y + 145);
 
-  // Seccion de Datos Inerciales (Columnas fijas estaticas para evitar oscilacion por signo)
+  // Seccion de Datos Inerciales (Dinamicos con gradiente de color verde a rojo segun limites de perfil)
   fill(25, 40, 58);
   rect(x + 20, y + 200, w - 40, 140, 6);
 
-  fill(255);
-  textSize(13);
-  text("Velocidades Giroscopo (dps):", x + 35, y + 215);
-  fill(200, 220, 255);
-  text("Wx: " + formatSignedFloat(gyroDpsX, 3, 2), x + 35, y + 240);
-  text("Wy: " + formatSignedFloat(gyroDpsY, 3, 2), x + 185, y + 240);
-  text("Wz: " + formatSignedFloat(gyroDpsZ, 3, 2), x + 335, y + 240);
+  float maxGyro = getProfileMaxGyroDps(activeProfileId);
+  float maxAccel = getProfileMaxAccelG(activeProfileId);
 
   fill(255);
-  text("Aceleraciones (g):", x + 35, y + 275);
-  fill(200, 220, 255);
-  text("Ax: " + formatSignedFloat(accelGX, 1, 3), x + 35, y + 300);
-  text("Ay: " + formatSignedFloat(accelGY, 1, 3), x + 185, y + 300);
-  text("Az: " + formatSignedFloat(accelGZ, 1, 3), x + 335, y + 300);
+  textSize(13);
+  text("Velocidades Giroscopo (dps) [Max: ±" + int(maxGyro) + "]:", x + 35, y + 215);
+
+  fill(getDynamicTelemetryColor(gyroDpsX, maxGyro));
+  text("Wx: " + formatSignedFloat(gyroDpsX, 3, 2), x + 35, y + 238);
+  drawMiniGaugeBar(gyroDpsX, maxGyro, x + 35, y + 256, 95, 3);
+
+  fill(getDynamicTelemetryColor(gyroDpsY, maxGyro));
+  text("Wy: " + formatSignedFloat(gyroDpsY, 3, 2), x + 185, y + 238);
+  drawMiniGaugeBar(gyroDpsY, maxGyro, x + 185, y + 256, 95, 3);
+
+  fill(getDynamicTelemetryColor(gyroDpsZ, maxGyro));
+  text("Wz: " + formatSignedFloat(gyroDpsZ, 3, 2), x + 335, y + 238);
+  drawMiniGaugeBar(gyroDpsZ, maxGyro, x + 335, y + 256, 95, 3);
+
+  fill(255);
+  text("Aceleraciones (g) [Max: ±" + int(maxAccel) + "g]:", x + 35, y + 275);
+
+  fill(getDynamicTelemetryColor(accelGX, maxAccel));
+  text("Ax: " + formatSignedFloat(accelGX, 1, 3), x + 35, y + 298);
+  drawMiniGaugeBar(accelGX, maxAccel, x + 35, y + 316, 95, 3);
+
+  fill(getDynamicTelemetryColor(accelGY, maxAccel));
+  text("Ay: " + formatSignedFloat(accelGY, 1, 3), x + 185, y + 298);
+  drawMiniGaugeBar(accelGY, maxAccel, x + 185, y + 316, 95, 3);
+
+  fill(getDynamicTelemetryColor(accelGZ, maxAccel));
+  text("Az: " + formatSignedFloat(accelGZ, 1, 3), x + 335, y + 298);
+  drawMiniGaugeBar(accelGZ, maxAccel, x + 335, y + 316, 95, 3);
 
   // Matriz de Banderas de Salud del Sistema (FDIR)
   fill(25, 40, 58);
