@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 
 namespace flight {
 
@@ -27,10 +28,11 @@ enum class BistCode : uint8_t {
     ALU_TEST_FAIL       = 0x01,
     IMU_COMM_FAIL       = 0x02,
     IMU_NOISE_EXCESSIVE = 0x03,
-    TIMER_FAIL          = 0x04,
     CALIBRATION_TIMEOUT = 0x05,
     UNKNOWN_ERROR       = 0xFF
 };
+
+extern std::atomic<uint32_t> g_health_flags;
 
 } // namespace flight
 

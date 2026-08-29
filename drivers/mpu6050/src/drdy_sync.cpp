@@ -1,4 +1,5 @@
 #include "drdy_sync.hpp"
+#include "safety_types.hpp"
 #include "esp_log.h"
 #include "esp_attr.h"
 
@@ -17,6 +18,9 @@ static bool              s_is_enabled      = false;
  */
 static void IRAM_ATTR drdy_gpio_isr_handler(void* arg) {
     s_interrupt_count = s_interrupt_count + 1;
+    // Apagar bandera de respaldo por temporizador al recibir la interrupción física DRDY
+    g_health_flags.fetch_and(~static_cast<uint32_t>(HEALTH_FLAG_TIMER_FALLBACK_ACTIVE), std::memory_order_relaxed);
+
     if (s_target_task != nullptr) {
         BaseType_t high_task_wakeup = pdFALSE;
         vTaskNotifyGiveFromISR(s_target_task, &high_task_wakeup);
@@ -25,6 +29,7 @@ static void IRAM_ATTR drdy_gpio_isr_handler(void* arg) {
         }
     }
 }
+
 
 esp_err_t drdy_sync_init(gpio_num_t drdy_pin, TaskHandle_t target_task) {
     s_drdy_pin = drdy_pin;

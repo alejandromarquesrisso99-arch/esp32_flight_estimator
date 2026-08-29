@@ -156,8 +156,8 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
     write_reg(REG_ACCEL_CONFIG, static_cast<uint8_t>(accel_fs_sel << 3));
 
     // 11. Configurar pin de interrupcion hardware (registro INT_PIN_CFG 0x37)
-    // Bit 5 = LATCH_INT_EN (0 = pulso de 50us), Bit 4 = INT_RD_CLEAR (1 = limpiar con cualquier lectura)
-    write_reg(REG_INT_PIN_CFG, 0x10);
+    // Bit 5 = LATCH_INT_EN (1 = retener nivel alto hasta lectura I2C), Bit 4 = INT_RD_CLEAR (1 = limpiar con cualquier lectura)
+    write_reg(REG_INT_PIN_CFG, 0x30);
 
     // 12. Habilitar interrupcion por dato listo Data Ready (registro INT_ENABLE 0x38)
     write_reg(REG_INT_ENABLE, 0x01);
