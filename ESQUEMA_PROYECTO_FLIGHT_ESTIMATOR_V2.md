@@ -1,4 +1,4 @@
-﻿# BluePrint Arquitectónico: High-Integrity Attitude Estimator (ESP32 / FreeRTOS)
+# BluePrint Arquitectónico: High-Integrity Attitude Estimator (ESP32 / FreeRTOS)
 
 ---
 
@@ -71,7 +71,7 @@ Flight-Estimator-V2/
  +-----------------------------------------------------------------------------------+
  |                                   HARDWARE ESP32                                  |
  |                                                                                   |
- |  [MPU6050 Pin INT] ──> GPIO18 (Flanco Subida) ──> GPIO ISR (IRAM, Nivel 3)       |
+ |  [MPU6050 Pin INT] ──> GPIO19 (Flanco Subida) ──> GPIO ISR (IRAM, Nivel 3)       |
  |                                                           |                       |
  |                                                           | vTaskNotifyGiveFromISR|
  |  [Hardware GPTimer] ──> Timeout Backup (1.2 * Ts) ────────+                       |
