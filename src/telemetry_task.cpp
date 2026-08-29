@@ -1,7 +1,8 @@
 #include "telemetry_task.hpp"
+#include "transport_uart.hpp"
+#include "transport_wifi_udp.hpp"
 #include "gnc_task.hpp"
 #include "mpu6050_driver.hpp"
-#include "driver/uart.h"
 #include "esp_timer.h"
 #include "esp_system.h"
 #include "esp_log.h"
@@ -12,11 +13,14 @@ static const char* TAG = "TELEMETRY";
 
 namespace flight {
 
-// Constantes de configuración de UART
-static constexpr uart_port_t UART_PORT_NUM = UART_NUM_0;
-static constexpr int UART_BAUD_RATE        = 115200;
-static constexpr size_t UART_RX_BUF_SIZE   = 256;
-static constexpr size_t TELEMETRY_STACK_SZ = 6144;
+static constexpr size_t TELEMETRY_STACK_SZ = 8192;
+
+// Instancias estáticas de transporte físico (Política Zero-Heap)
+static UartTransport    s_uart_transport;
+static WifiUdpTransport s_wifi_transport;
+
+// Por defecto en la rama Wi-Fi activamos el transporte Wi-Fi SoftAP
+static ITelemetryTransport* s_active_transport = &s_wifi_transport;
 
 // Búferes de asignación estática de FreeRTOS (Política Zero-Heap)
 static StackType_t   s_telemetry_stack[TELEMETRY_STACK_SZ];
@@ -36,7 +40,7 @@ static protocol::Packet<protocol::PayloadAckNack>    s_ack_packet;
 static protocol::Packet<protocol::PayloadBistReport> s_bist_packet;
 static protocol::Packet<protocol::PayloadTelemetry>  s_telem_packet;
 
-// Máquina de estados del analizador de tramas UART RX
+// Máquina de estados del analizador de tramas entrantes
 enum class RxState {
     WAIT_PREAMBLE_0,
     WAIT_PREAMBLE_1,
@@ -47,8 +51,10 @@ enum class RxState {
     READ_CHECKSUM_HIGH
 };
 
-static void uart_send_raw(const void* data, size_t length) {
-    uart_write_bytes(UART_PORT_NUM, reinterpret_cast<const char*>(data), length);
+static void transport_send_raw(const void* data, size_t length) {
+    if (s_active_transport != nullptr) {
+        s_active_transport->send(data, length);
+    }
 }
 
 static void send_ack_nack(protocol::MsgId ref_msg, protocol::AckStatus status) {
@@ -56,7 +62,7 @@ static void send_ack_nack(protocol::MsgId ref_msg, protocol::AckStatus status) {
     s_ack_packet.payload.ref_msg_id = static_cast<uint8_t>(ref_msg);
     s_ack_packet.payload.status     = static_cast<uint8_t>(status);
     protocol::finalize_packet(s_ack_packet);
-    uart_send_raw(&s_ack_packet, sizeof(s_ack_packet));
+    transport_send_raw(&s_ack_packet, sizeof(s_ack_packet));
 }
 
 void telemetry_send_bist_report(uint8_t bist_code, 
@@ -88,7 +94,7 @@ void telemetry_send_bist_report(uint8_t bist_code,
     }
 
     protocol::finalize_packet(s_bist_packet);
-    uart_send_raw(&s_bist_packet, sizeof(s_bist_packet));
+    transport_send_raw(&s_bist_packet, sizeof(s_bist_packet));
 }
 
 static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* payload) {
@@ -148,7 +154,9 @@ static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* 
     }
 }
 
-static void process_uart_rx() {
+static void process_incoming_stream() {
+    if (s_active_transport == nullptr) return;
+
     static RxState rx_state = RxState::WAIT_PREAMBLE_0;
     static uint8_t rx_msg_id = 0;
     static uint8_t rx_len = 0;
@@ -156,8 +164,12 @@ static void process_uart_rx() {
     static uint8_t rx_payload_idx = 0;
     static uint8_t rx_chk_low = 0;
 
-    uint8_t byte = 0;
-    while (uart_read_bytes(UART_PORT_NUM, &byte, 1, 0) > 0) {
+    static uint8_t rx_buf[128];
+    size_t bytes_read = s_active_transport->receive(rx_buf, sizeof(rx_buf));
+
+    for (size_t i = 0; i < bytes_read; ++i) {
+        uint8_t byte = rx_buf[i];
+
         switch (rx_state) {
             case RxState::WAIT_PREAMBLE_0:
                 if (byte == protocol::PREAMBLE_0) {
@@ -217,18 +229,22 @@ static void process_uart_rx() {
     }
 }
 
+ITelemetryTransport* telemetry_get_active_transport() {
+    return s_active_transport;
+}
+
+void telemetry_set_active_transport(ITelemetryTransport* transport) {
+    if (transport != nullptr) {
+        s_active_transport = transport;
+    }
+}
+
 void telemetry_task_init() {
-    // 1. Configurar e instalar driver UART
-    uart_config_t uart_config = {};
-    uart_config.baud_rate           = UART_BAUD_RATE;
-    uart_config.data_bits           = UART_DATA_8_BITS;
-    uart_config.parity              = UART_PARITY_DISABLE;
-    uart_config.stop_bits           = UART_STOP_BITS_1;
-    uart_config.flow_ctrl           = UART_HW_FLOWCTRL_DISABLE;
-    uart_config.rx_flow_ctrl_thresh = 0;
-    uart_config.source_clk          = UART_SCLK_DEFAULT;
-    ESP_ERROR_CHECK(uart_param_config(UART_PORT_NUM, &uart_config));
-    ESP_ERROR_CHECK(uart_driver_install(UART_PORT_NUM, UART_RX_BUF_SIZE, 0, 0, nullptr, 0));
+    // 1. Inicializar el transporte activo (UART o Wi-Fi UDP)
+    if (s_active_transport != nullptr) {
+        ESP_LOGI(TAG, "Inicializando transporte de telemetria: %s", s_active_transport->get_name());
+        ESP_ERROR_CHECK(s_active_transport->init());
+    }
 
     // 2. Crear cola estatica de telemetria (1 elemento, politica de sobrescritura)
     g_telemetry_queue = xQueueCreateStatic(
@@ -252,7 +268,8 @@ void telemetry_task_init() {
     );
     assert(task_handle != nullptr);
 
-    ESP_LOGI(TAG, "Tarea de telemetria inicializada en Nucleo 0 (Asignacion Estatica Zero-Heap)");
+    ESP_LOGI(TAG, "Tarea de telemetria inicializada en Nucleo 0 con transporte [%s]", 
+             s_active_transport ? s_active_transport->get_name() : "NONE");
 }
 
 void telemetry_task_run(void* pvParameters) {
@@ -260,8 +277,8 @@ void telemetry_task_run(void* pvParameters) {
     const TickType_t heartbeat_period_ticks = pdMS_TO_TICKS(100); // 10 Hz
 
     while (true) {
-        // 1. Procesar todos los bytes UART entrantes
-        process_uart_rx();
+        // 1. Procesar trafico entrante del transporte activo
+        process_incoming_stream();
 
         // 2. Manejar emision de telemetria segun estado del sistema
         switch (g_system_state) {
@@ -277,7 +294,7 @@ void telemetry_task_run(void* pvParameters) {
                     s_hb_packet.payload.health_flags = g_health_flags.load(std::memory_order_relaxed);
                     protocol::finalize_packet(s_hb_packet);
 
-                    uart_send_raw(&s_hb_packet, sizeof(s_hb_packet));
+                    transport_send_raw(&s_hb_packet, sizeof(s_hb_packet));
                 }
                 vTaskDelay(pdMS_TO_TICKS(10));
                 break;
@@ -334,7 +351,7 @@ void telemetry_task_run(void* pvParameters) {
                     s_telem_packet.payload = incoming_payload;
                     protocol::finalize_packet(s_telem_packet);
 
-                    uart_send_raw(&s_telem_packet, sizeof(s_telem_packet));
+                    transport_send_raw(&s_telem_packet, sizeof(s_telem_packet));
                 }
                 break;
             }

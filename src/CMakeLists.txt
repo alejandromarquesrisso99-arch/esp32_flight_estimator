@@ -2,6 +2,8 @@ idf_component_register(
     SRCS 
         "main.cpp"
         "telemetry_task.cpp"
+        "transport_uart.cpp"
+        "transport_wifi_udp.cpp"
         "gnc_task.cpp"
         "fdir_manager.cpp"
         "timer_watchdog.cpp"
@@ -16,6 +18,10 @@ idf_component_register(
         esp_hw_support 
         esp_timer 
         nvs_flash 
+        esp_wifi 
+        esp_netif 
+        esp_event 
+        lwip 
         matrix 
         ekf 
         mpu6050

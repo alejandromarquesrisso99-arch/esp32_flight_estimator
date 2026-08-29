@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "telemetry_protocol.hpp"
+#include "telemetry_transport.hpp"
 
 namespace flight {
 
@@ -34,5 +35,14 @@ void telemetry_send_bist_report(uint8_t bist_code,
                                const float gyro_bias_rads[3], 
                                const float accel_bias_mss[3]);
 
-} // namespace flight
+/**
+ * @brief Obtiene el transporte de telemetría actualmente activo
+ */
+ITelemetryTransport* telemetry_get_active_transport();
 
+/**
+ * @brief Configura el transporte de telemetría activo (antes de telemetry_task_init)
+ */
+void telemetry_set_active_transport(ITelemetryTransport* transport);
+
+} // namespace flight

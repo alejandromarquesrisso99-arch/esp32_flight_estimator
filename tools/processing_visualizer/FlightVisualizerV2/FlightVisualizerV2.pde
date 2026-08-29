@@ -11,6 +11,22 @@
  */
 
 import processing.serial.*;
+import java.net.DatagramSocket;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.SocketTimeoutException;
+
+// Modos de conexion fisica
+final int CONN_MODE_NONE   = 0;
+final int CONN_MODE_SERIAL = 1;
+final int CONN_MODE_WIFI   = 2;
+int activeConnMode = CONN_MODE_NONE;
+
+// Configuracion Wi-Fi UDP
+DatagramSocket udpSocket = null;
+final int UDP_LOCAL_PORT  = 5005;  // Puerto local en PC para recepcion de telemetria
+final int UDP_REMOTE_PORT = 5000;  // Puerto en ESP32 para envio de comandos
+final String ESP32_IP     = "192.168.4.1";
 
 // Constantes de protocolo coincidentes con telemetry_protocol.hpp
 final int PREAMBLE_0 = 0xAA;
@@ -42,7 +58,7 @@ final int UI_STATE_HARD_FAULT        = 4;
 
 int currentUiState = UI_STATE_PORT_SELECT;
 Serial serialPort = null;
-String selectedPortName = "SIN PUERTO SERIE (DEMO)";
+String selectedPortName = "SIN CONEXION (DEMO)";
 int baudRate = 115200;
 boolean isDemoMode = false;
 float demoSimTime = 0.0f;
@@ -105,8 +121,8 @@ void draw() {
   propAngle += 0.45f;
   if (propAngle > TWO_PI) propAngle -= TWO_PI;
   
-  // Leer y procesar flujo serie si esta conectado
-  processSerial();
+  // Leer y procesar flujo de telemetria (Serial o Wi-Fi UDP)
+  processIncomingTraffic();
 
   // Ejecutar simulacion fisica en modo demo
   if (isDemoMode) {
@@ -142,42 +158,70 @@ void drawPortSelectionScreen() {
   fill(0, 200, 255);
   textSize(24);
   textAlign(CENTER, TOP);
-  text("ESTIMADOR DE VUELO V2 - ESTACION TERRENA", width/2, 40);
+  text("ESTIMADOR DE VUELO V2 - ESTACION TERRENA", width/2, 35);
 
   textSize(14);
   fill(180, 200, 220);
-  text("Seleccione el puerto serie COM conectado al ESP32 (Baudios: 115200)", width/2, 80);
+  text("Seleccione el medio de conexion con el ESP32 (Wi-Fi UDP o Cable Serie UART)", width/2, 70);
+
+  // 1. Tarjeta de Conexion Inalambrica Wi-Fi UDP
+  float wifiY = 110;
+  boolean hoverWifi = (mouseX > width/2 - 220 && mouseX < width/2 + 220 && mouseY > wifiY && mouseY < wifiY + 65);
+  
+  fill(hoverWifi ? color(15, 75, 110) : color(12, 45, 70));
+  stroke(hoverWifi ? color(0, 240, 255) : color(0, 180, 220));
+  strokeWeight(hoverWifi ? 2 : 1.5);
+  rect(width/2 - 220, wifiY, 440, 65, 8);
+
+  fill(0, 230, 255);
+  textSize(15);
+  textAlign(CENTER, TOP);
+  text("[W]  CONECTAR VIA WI-FI UDP (INALAMBRICO)", width/2, wifiY + 12);
+
+  fill(170, 210, 240);
+  textSize(12);
+  text("Red: ESP32_ATTITUDE_GNC | IP: 192.168.4.1:5000 | RX: 5005", width/2, wifiY + 38);
+
+  // 2. Separador de Puertos Serie
+  float startY = wifiY + 90;
+  fill(160, 185, 210);
+  textSize(13);
+  textAlign(CENTER, TOP);
+  text("--- O SELECCIONE PUERTO SERIE UART (CABLE USB) ---", width/2, startY - 20);
 
   String[] ports = Serial.list();
-  float startY = 130;
   
   if (ports != null && ports.length > 0) {
     for (int i = 0; i < ports.length; i++) {
-      float y = startY + i * 50;
-      boolean hover = (mouseX > width/2 - 160 && mouseX < width/2 + 160 && mouseY > y && mouseY < y + 38);
+      float y = startY + i * 46;
+      boolean hover = (mouseX > width/2 - 220 && mouseX < width/2 + 220 && mouseY > y && mouseY < y + 36);
       
       fill(hover ? color(30, 80, 120) : color(25, 40, 55));
       stroke(hover ? color(0, 220, 255) : color(50, 80, 110));
-      rect(width/2 - 160, y, 320, 38, 6);
+      strokeWeight(1);
+      rect(width/2 - 220, y, 440, 36, 6);
 
       fill(255);
       textAlign(CENTER, CENTER);
-      text("[" + (i + 1) + "]  CONECTAR A " + ports[i], width/2, y + 19);
+      textSize(13);
+      text("[" + (i + 1) + "]  CONECTAR A PUERTO " + ports[i] + " (115200 Baudios)", width/2, y + 18);
     }
   } else {
-    fill(255, 120, 120);
+    fill(255, 140, 140);
     textAlign(CENTER, CENTER);
-    text("No hay puertos serie fisicos disponibles.", width/2, 160);
+    textSize(13);
+    text("No se detectaron puertos serie fisicos USB.", width/2, startY + 20);
   }
 
-  // Tarjeta de simulacion en modo demo
-  float demoY = (ports != null && ports.length > 0) ? startY + ports.length * 50 + 30 : 220;
-  boolean hoverDemo = (mouseX > width/2 - 160 && mouseX < width/2 + 160 && mouseY > demoY && mouseY < demoY + 45);
+  // 3. Tarjeta de simulacion en modo demo
+  int portCount = (ports != null) ? ports.length : 0;
+  float demoY = max(startY + portCount * 46 + 25, 450);
+  boolean hoverDemo = (mouseX > width/2 - 220 && mouseX < width/2 + 220 && mouseY > demoY && mouseY < demoY + 45);
 
   fill(hoverDemo ? color(20, 120, 80) : color(18, 70, 50));
   stroke(hoverDemo ? color(0, 255, 180) : color(40, 150, 100));
   strokeWeight(2);
-  rect(width/2 - 160, demoY, 320, 45, 6);
+  rect(width/2 - 220, demoY, 440, 45, 6);
 
   fill(0, 255, 200);
   textAlign(CENTER, CENTER);
@@ -187,7 +231,7 @@ void drawPortSelectionScreen() {
   fill(140, 170, 190);
   textSize(12);
   textAlign(CENTER, BOTTOM);
-  text("Puede pulsar 'D' en cualquier momento para ver la actitud 3D y telemetria fuera de linea.", width/2, height - 25);
+  text("Pulse 'W' para Wi-Fi UDP, '1'..'9' para Serial COM o 'D' para Simulacion.", width/2, height - 25);
 }
 
 void drawProfileSelectionScreen() {
@@ -1695,22 +1739,30 @@ void updateDemoSimulation() {
 
 void mousePressed() {
   if (currentUiState == UI_STATE_PORT_SELECT) {
+    // 1. Clic en Boton Wi-Fi UDP
+    float wifiY = 110;
+    if (mouseX > width/2 - 220 && mouseX < width/2 + 220 && mouseY > wifiY && mouseY < wifiY + 65) {
+      connectToWifiUdp();
+      return;
+    }
+
+    // 2. Clic en Lista de Puertos Serie
+    float startY = wifiY + 90;
     String[] ports = Serial.list();
-    float startY = 130;
-    
     if (ports != null) {
       for (int i = 0; i < ports.length; i++) {
-        float y = startY + i * 50;
-        if (mouseX > width/2 - 160 && mouseX < width/2 + 160 && mouseY > y && mouseY < y + 38) {
+        float y = startY + i * 46;
+        if (mouseX > width/2 - 220 && mouseX < width/2 + 220 && mouseY > y && mouseY < y + 36) {
           connectToSerial(ports[i]);
           return;
         }
       }
     }
 
-    // Clic en el boton de modo demo
-    float demoY = (ports != null && ports.length > 0) ? startY + ports.length * 50 + 30 : 220;
-    if (mouseX > width/2 - 160 && mouseX < width/2 + 160 && mouseY > demoY && mouseY < demoY + 45) {
+    // 3. Clic en el boton de modo demo
+    int portCount = (ports != null) ? ports.length : 0;
+    float demoY = max(startY + portCount * 46 + 25, 450);
+    if (mouseX > width/2 - 220 && mouseX < width/2 + 220 && mouseY > demoY && mouseY < demoY + 45) {
       startDemoMode(1);
     }
   } else if (currentUiState == UI_STATE_AWAITING_PROFILE) {
@@ -1806,6 +1858,10 @@ void keyPressed() {
   }
 
   if (currentUiState == UI_STATE_PORT_SELECT) {
+    if (key == 'w' || key == 'W') {
+      connectToWifiUdp();
+      return;
+    }
     String[] ports = Serial.list();
     if (ports != null) {
       int idx = key - '1';
@@ -1822,7 +1878,7 @@ void keyPressed() {
 }
 
 void selectProfile(int id) {
-  if (serialPort != null) {
+  if (activeConnMode != CONN_MODE_NONE && (serialPort != null || udpSocket != null)) {
     sendSetProfileCmd(id);
   } else {
     // Modo demo fuera de linea
@@ -1830,24 +1886,64 @@ void selectProfile(int id) {
   }
 }
 
+void connectToWifiUdp() {
+  try {
+    if (serialPort != null) {
+      serialPort.stop();
+      serialPort = null;
+    }
+    if (udpSocket != null && !udpSocket.isClosed()) {
+      udpSocket.close();
+    }
+    udpSocket = new DatagramSocket(UDP_LOCAL_PORT);
+    udpSocket.setSoTimeout(1); // Lectura no bloqueante con timeout de 1ms
+    udpSocket.setBroadcast(true);
+    activeConnMode = CONN_MODE_WIFI;
+    selectedPortName = "WI-FI UDP (192.168.4.1:5000 / RX: 5005)";
+    currentUiState = UI_STATE_AWAITING_PROFILE;
+    println("Conectado via Wi-Fi UDP. Escuchando en puerto local " + UDP_LOCAL_PORT);
+  } catch (Exception e) {
+    println("Error al inicializar socket UDP: " + e.getMessage());
+    selectedPortName = "WI-FI UDP (Error Socket)";
+    currentUiState = UI_STATE_AWAITING_PROFILE;
+  }
+}
+
 void connectToSerial(String portName) {
   try {
+    if (udpSocket != null && !udpSocket.isClosed()) {
+      udpSocket.close();
+      udpSocket = null;
+    }
     if (serialPort != null) {
       serialPort.stop();
     }
     selectedPortName = portName;
     serialPort = new Serial(this, selectedPortName, baudRate);
+    activeConnMode = CONN_MODE_SERIAL;
     currentUiState = UI_STATE_AWAITING_PROFILE;
-    println("Conectado a: " + portName);
+    println("Conectado a puerto serie: " + portName);
   } catch (Exception e) {
-    println("Error conectando al puerto: " + e.getMessage());
+    println("Error conectando al puerto serie: " + e.getMessage());
     currentUiState = UI_STATE_AWAITING_PROFILE;
   }
 }
 
-void sendSetProfileCmd(int profileId) {
-  if (serialPort == null) return;
+void sendPacketRaw(byte[] pkt) {
+  if (activeConnMode == CONN_MODE_SERIAL && serialPort != null) {
+    serialPort.write(pkt);
+  } else if (activeConnMode == CONN_MODE_WIFI && udpSocket != null) {
+    try {
+      InetAddress targetIp = InetAddress.getByName(ESP32_IP);
+      DatagramPacket sendPkt = new DatagramPacket(pkt, pkt.length, targetIp, UDP_REMOTE_PORT);
+      udpSocket.send(sendPkt);
+    } catch (Exception e) {
+      println("Error transmitiendo paquete UDP: " + e.getMessage());
+    }
+  }
+}
 
+void sendSetProfileCmd(int profileId) {
   byte[] pkt = new byte[7];
   pkt[0] = (byte)PREAMBLE_0;
   pkt[1] = (byte)PREAMBLE_1;
@@ -1860,25 +1956,23 @@ void sendSetProfileCmd(int profileId) {
   pkt[5] = (byte)(chk & 0xFF);
   pkt[6] = (byte)((chk >> 8) & 0xFF);
 
-  serialPort.write(pkt);
-  println("Enviado CMD_SET_PROFILE: " + profileId);
+  sendPacketRaw(pkt);
+  println("Enviado CMD_SET_PROFILE: " + profileId + " via " + (activeConnMode == CONN_MODE_WIFI ? "Wi-Fi UDP" : "Serial"));
 }
 
 void sendSystemResetCmd() {
-  if (serialPort != null) {
-    byte[] pkt = new byte[6];
-    pkt[0] = (byte)PREAMBLE_0;
-    pkt[1] = (byte)PREAMBLE_1;
-    pkt[2] = (byte)MSG_CMD_SYSTEM_RESET;
-    pkt[3] = (byte)0; // Longitud = 0 bytes
+  byte[] pkt = new byte[6];
+  pkt[0] = (byte)PREAMBLE_0;
+  pkt[1] = (byte)PREAMBLE_1;
+  pkt[2] = (byte)MSG_CMD_SYSTEM_RESET;
+  pkt[3] = (byte)0; // Longitud = 0 bytes
 
-    int chk = calculateFletcher16(pkt, 2, 2);
-    pkt[4] = (byte)(chk & 0xFF);
-    pkt[5] = (byte)((chk >> 8) & 0xFF);
+  int chk = calculateFletcher16(pkt, 2, 2);
+  pkt[4] = (byte)(chk & 0xFF);
+  pkt[5] = (byte)((chk >> 8) & 0xFF);
 
-    serialPort.write(pkt);
-    println("Enviado CMD_SYSTEM_RESET al ESP32");
-  }
+  sendPacketRaw(pkt);
+  println("Enviado CMD_SYSTEM_RESET al ESP32 via " + (activeConnMode == CONN_MODE_WIFI ? "Wi-Fi UDP" : "Serial"));
   isDemoMode = false;
   currentUiState = UI_STATE_AWAITING_PROFILE;
 }
@@ -1894,69 +1988,100 @@ int calculateFletcher16(byte[] data, int offset, int len) {
   return (sum2 << 8) | sum1;
 }
 
+void processIncomingTraffic() {
+  if (activeConnMode == CONN_MODE_SERIAL) {
+    processSerial();
+  } else if (activeConnMode == CONN_MODE_WIFI) {
+    processUdp();
+  }
+}
+
+void processUdp() {
+  if (udpSocket == null || udpSocket.isClosed()) return;
+
+  byte[] udpBuf = new byte[512];
+  try {
+    while (true) {
+      DatagramPacket recvPkt = new DatagramPacket(udpBuf, udpBuf.length);
+      udpSocket.receive(recvPkt);
+      int len = recvPkt.getLength();
+      for (int i = 0; i < len; i++) {
+        processIncomingByte(udpBuf[i] & 0xFF);
+      }
+    }
+  } catch (SocketTimeoutException e) {
+    // Normal: no hay mas datagramas disponibles en la cola
+  } catch (Exception e) {
+    // Error no critico de lectura
+  }
+}
+
 void processSerial() {
   if (serialPort == null) return;
 
   while (serialPort.available() > 0) {
     int b = serialPort.read() & 0xFF;
+    processIncomingByte(b);
+  }
+}
 
-    switch (rxState) {
-      case 0: // PREAMBLE_0
-        if (b == PREAMBLE_0) rxState = 1;
-        break;
+void processIncomingByte(int b) {
+  switch (rxState) {
+    case 0: // PREAMBLE_0
+      if (b == PREAMBLE_0) rxState = 1;
+      break;
 
-      case 1: // PREAMBLE_1
-        if (b == PREAMBLE_1) {
-          rxState = 2;
-        } else if (b != PREAMBLE_0) {
-          rxState = 0;
-        }
-        break;
-
-      case 2: // MSG_ID
-        rxMsgId = b;
-        rxState = 3;
-        break;
-
-      case 3: // LENGTH
-        rxLen = b;
-        rxBufIdx = 0;
-        if (rxLen > rxBuffer.length) {
-          rxState = 0;
-        } else if (rxLen == 0) {
-          rxState = 5;
-        } else {
-          rxState = 4;
-        }
-        break;
-
-      case 4: // PAYLOAD
-        rxBuffer[rxBufIdx++] = (byte)b;
-        if (rxBufIdx >= rxLen) rxState = 5;
-        break;
-
-      case 5: // CHK_LOW
-        rxChkLow = b;
-        rxState = 6;
-        break;
-
-      case 6: // CHK_HIGH
-        int receivedChk = (b << 8) | rxChkLow;
-        byte[] chkData = new byte[2 + rxLen];
-        chkData[0] = (byte)rxMsgId;
-        chkData[1] = (byte)rxLen;
-        System.arraycopy(rxBuffer, 0, chkData, 2, rxLen);
-
-        int calcChk = calculateFletcher16(chkData, 0, chkData.length);
-        if (calcChk == receivedChk) {
-          handleReceivedPacket(rxMsgId, rxBuffer, rxLen);
-          rxPacketCount++;
-        } else {
-          checksumErrors++;
-        }
+    case 1: // PREAMBLE_1
+      if (b == PREAMBLE_1) {
+        rxState = 2;
+      } else if (b != PREAMBLE_0) {
         rxState = 0;
-        break;
-    }
+      }
+      break;
+
+    case 2: // MSG_ID
+      rxMsgId = b;
+      rxState = 3;
+      break;
+
+    case 3: // LENGTH
+      rxLen = b;
+      rxBufIdx = 0;
+      if (rxLen > rxBuffer.length) {
+        rxState = 0;
+      } else if (rxLen == 0) {
+        rxState = 5;
+      } else {
+        rxState = 4;
+      }
+      break;
+
+    case 4: // PAYLOAD
+      rxBuffer[rxBufIdx++] = (byte)b;
+      if (rxBufIdx >= rxLen) rxState = 5;
+      break;
+
+    case 5: // CHK_LOW
+      rxChkLow = b;
+      rxState = 6;
+      break;
+
+    case 6: // CHK_HIGH
+      int receivedChk = (b << 8) | rxChkLow;
+      byte[] chkData = new byte[2 + rxLen];
+      chkData[0] = (byte)rxMsgId;
+      chkData[1] = (byte)rxLen;
+      System.arraycopy(rxBuffer, 0, chkData, 2, rxLen);
+
+      int calcChk = calculateFletcher16(chkData, 0, chkData.length);
+      if (calcChk == receivedChk) {
+        handleReceivedPacket(rxMsgId, rxBuffer, rxLen);
+        rxPacketCount++;
+      } else {
+        checksumErrors++;
+      }
+      rxState = 0;
+      break;
   }
 }
 
