@@ -13,23 +13,23 @@ Sistema de referencia de actitud y rumbo (AHRS) de tiempo real duro basado en un
 
 ```mermaid
 flowchart TD
-    subgraph Core_1 [Núcleo 1: Dominio de Tiempo Real Duro Determinista (Prioridad 24)]
-        DRDY[MPU6050 DRDY GPIO 19] -->|Notificación Directa ISR en IRAM| GNC_Task[Tarea GNC - 200Hz a 1000Hz]
-        GPTimer[Respaldo GPTimer 1MHz] -->|Timeout 1.5x T_muestreo| GNC_Task
-        GNC_Task -->|1. Lectura en Ráfaga 14B| MPU[Driver MPU6050 Fast-Mode]
-        GNC_Task -->|2. Alimentar Watchdog| Feed[timer_watchdog_feed]
-        GNC_Task -->|3. Supervisor de Salud| FDIR[Gestor FDIR]
-        FDIR -->|G-Gating y Límites de Tasa| EKF_7D[Motor EKF de 7 Estados]
-        EKF_7D -->|4. Actualización de Covarianza Joseph| EKF_State[q0..q3, bx..bz]
-        EKF_State -->|5. Medición de Ciclos WCET| WCET[Contador de Ciclos CPU]
-        WCET -->|6. Sobrescribir Cola| StaticQueue[g_telemetry_queue]
+    subgraph Core_1 ["Núcleo 1: Dominio de Tiempo Real Duro (Prioridad 24)"]
+        DRDY["MPU6050 DRDY (GPIO 19)"] -->|"Notificación Directa ISR en IRAM"| GNC_Task["Tarea GNC (200 Hz - 1000 Hz)"]
+        GPTimer["Respaldo GPTimer (1 MHz)"] -->|"Timeout 1.5x T_muestreo"| GNC_Task
+        GNC_Task -->|"1. Lectura en Ráfaga (14 Bytes)"| MPU["Driver MPU6050 (Fast-Mode)"]
+        GNC_Task -->|"2. Alimentar Watchdog"| Feed["timer_watchdog_feed()"]
+        GNC_Task -->|"3. Supervisor de Salud"| FDIR["Gestor FDIR"]
+        FDIR -->|"G-Gating y Límites de Tasa"| EKF_7D["Motor EKF de 7 Estados"]
+        EKF_7D -->|"4. Actualización Covarianza Joseph"| EKF_State["Estado EKF (q0..q3, bx..bz)"]
+        EKF_State -->|"5. Medición de Ciclos WCET"| WCET["Contador de Ciclos CPU"]
+        WCET -->|"6. Sobrescribir Cola"| StaticQueue["g_telemetry_queue (Estática)"]
     end
 
-    subgraph Core_0 [Núcleo 0: Dominio de Servicio y Telemetría (Prioridad 3)]
-        StaticQueue -->|xQueueReceive sin bloqueo| TelemTask[Tarea de Telemetría]
-        TelemTask -->|Framing Binario Fletcher-16| UART[UART0 @ 115200 Baudios]
-        UART -->|Transmisión en Vivo| GroundStation[Estación Terrena en Processing]
-        GroundStation -->|Handshake de Perfil| TelemTask
+    subgraph Core_0 ["Núcleo 0: Dominio de Servicio y Telemetría (Prioridad 3)"]
+        StaticQueue -->|"xQueueReceive sin bloqueo"| TelemTask["Tarea de Telemetría"]
+        TelemTask -->|"Framing Binario Fletcher-16"| UART["UART0 (115200 Baudios)"]
+        UART -->|"Transmisión en Vivo"| GroundStation["Estación Terrena en Processing"]
+        GroundStation -->|"Handshake de Perfil"| TelemTask
     end
 ```
 
