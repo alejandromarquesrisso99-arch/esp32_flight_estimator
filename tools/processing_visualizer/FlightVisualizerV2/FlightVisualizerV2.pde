@@ -353,9 +353,9 @@ void draw3DVisualizer(float x, float y, float w, float h) {
   fill(0, 220, 255);
   textSize(13);
   textAlign(LEFT, TOP);
-  text("ROLL:  " + nf(rollDeg, 1, 2) + " deg", x + 25, y + 58);
-  text("PITCH: " + nf(pitchDeg, 1, 2) + " deg", x + 25, y + 78);
-  text("YAW:   " + nf(yawDeg, 1, 2) + " deg", x + 25, y + 98);
+  text("ROLL:  " + formatSignedFloat(rollDeg, 3, 2) + " deg", x + 25, y + 58);
+  text("PITCH: " + formatSignedFloat(pitchDeg, 3, 2) + " deg", x + 25, y + 78);
+  text("YAW:   " + formatSignedFloat(yawDeg, 3, 2) + " deg", x + 25, y + 98);
 
   if (isDemoMode) {
     fill(0, 255, 180);
@@ -1466,6 +1466,14 @@ void drawFlatBoardModel() {
   popMatrix();
 }
 
+String formatSignedFloat(float val, int digits, int decimals) {
+  float absVal = abs(val);
+  // Redondeo de proteccion para evitar -0.00
+  if (absVal < 0.5f * pow(10, -decimals)) absVal = 0.0f;
+  String sign = (val >= 0.0f) ? "+" : "-";
+  return sign + nf(absVal, digits, decimals);
+}
+
 void drawTelemetryPanel(float x, float y, float w, float h) {
   hint(DISABLE_DEPTH_TEST);
 
@@ -1491,19 +1499,24 @@ void drawTelemetryPanel(float x, float y, float w, float h) {
   text("Paquetes RX / Errores:  " + rxPacketCount + " / " + checksumErrors, x + 35, y + 120);
   text("Perfil de Vuelo Activo: Perfil " + activeProfileId, x + 35, y + 145);
 
-  // Seccion de Datos Inerciales
+  // Seccion de Datos Inerciales (Columnas fijas estaticas para evitar oscilacion por signo)
   fill(25, 40, 58);
   rect(x + 20, y + 200, w - 40, 140, 6);
 
   fill(255);
+  textSize(13);
   text("Velocidades Giroscopo (dps):", x + 35, y + 215);
   fill(200, 220, 255);
-  text("Wx: " + nf(gyroDpsX, 1, 2) + "   Wy: " + nf(gyroDpsY, 1, 2) + "   Wz: " + nf(gyroDpsZ, 1, 2), x + 50, y + 240);
+  text("Wx: " + formatSignedFloat(gyroDpsX, 3, 2), x + 35, y + 240);
+  text("Wy: " + formatSignedFloat(gyroDpsY, 3, 2), x + 185, y + 240);
+  text("Wz: " + formatSignedFloat(gyroDpsZ, 3, 2), x + 335, y + 240);
 
   fill(255);
   text("Aceleraciones (g):", x + 35, y + 275);
   fill(200, 220, 255);
-  text("Ax: " + nf(accelGX, 1, 3) + "   Ay: " + nf(accelGY, 1, 3) + "   Az: " + nf(accelGZ, 1, 3), x + 50, y + 300);
+  text("Ax: " + formatSignedFloat(accelGX, 1, 3), x + 35, y + 300);
+  text("Ay: " + formatSignedFloat(accelGY, 1, 3), x + 185, y + 300);
+  text("Az: " + formatSignedFloat(accelGZ, 1, 3), x + 335, y + 300);
 
   // Matriz de Banderas de Salud del Sistema (FDIR)
   fill(25, 40, 58);
