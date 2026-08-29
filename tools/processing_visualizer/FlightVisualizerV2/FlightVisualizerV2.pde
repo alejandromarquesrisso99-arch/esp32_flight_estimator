@@ -46,6 +46,7 @@ String selectedPortName = "SIN PUERTO SERIE (DEMO)";
 int baudRate = 115200;
 boolean isDemoMode = false;
 float demoSimTime = 0.0f;
+float propAngle = 0.0f;
 
 // Variables de estado de telemetria
 long lastPacketTimeMs = 0;
@@ -89,6 +90,10 @@ void setup() {
 
 void draw() {
   background(15, 20, 28);
+  
+  // Actualizar rotacion continua de helices
+  propAngle += 0.45f;
+  if (propAngle > TWO_PI) propAngle -= TWO_PI;
   
   // Leer y procesar flujo serie si esta conectado
   processSerial();
@@ -301,14 +306,14 @@ void draw3DVisualizer(float x, float y, float w, float h) {
   drawGroundReferenceGrid(160, 32, 110);
 
   // 2. Aplicar matriz de rotacion del cuaternion de actitud:
-  // IMU Y (Pitch) -> Processing X (Inclinacion lateral)
-  // IMU Z (Yaw)   -> Processing Y (Giro vertical)
-  // IMU X (Roll)  -> Processing Z (Alabeo longitudinal)
+  // IMU Y (Pitch) -> Processing X (-q2 para sentido de cabeceo correcto)
+  // IMU Z (Yaw)   -> Processing Y (+q3 para sentido de guiñada/rumbo correcto)
+  // IMU X (Roll)  -> Processing Z (-q1 para alabeo)
   pushMatrix();
-  applyQuaternionRotation(q0, q2, -q3, -q1);
+  applyQuaternionRotation(q0, -q2, q3, -q1);
 
-  // 3. Renderizado del modelo plano de la placa IMU
-  drawFlatBoardModel();
+  // 3. Renderizado del modelo 3D del vehiculo segun perfil de vuelo
+  drawVehicleModel();
 
   popMatrix();
   popMatrix();
@@ -319,7 +324,12 @@ void draw3DVisualizer(float x, float y, float w, float h) {
   fill(0, 220, 255);
   textSize(16);
   textAlign(LEFT, TOP);
-  text("ESTIMADOR DE ACTITUD 3D (PLACA IMU)", x + 20, y + 18);
+  String modelTitle = "ESTIMADOR DE ACTITUD 3D";
+  if (activeProfileId == 1) modelTitle = "ESTIMADOR DE ACTITUD 3D - DRON CIVIL";
+  else if (activeProfileId == 2) modelTitle = "ESTIMADOR DE ACTITUD 3D - DRON ACRO";
+  else if (activeProfileId == 3) modelTitle = "ESTIMADOR DE ACTITUD 3D - COHETE";
+  else if (activeProfileId == 4) modelTitle = "ESTIMADOR DE ACTITUD 3D - MISIL";
+  text(modelTitle, x + 20, y + 18);
 
   // Cuadro HUD de Angulos de Euler
   fill(20, 35, 50, 220);
@@ -371,6 +381,368 @@ void drawGroundReferenceGrid(float size, float step, float yOffset) {
   stroke(70, 255, 70, 200); line(0, 0, 0, size, 0, 0);  // Derecha (+X)
 
   popMatrix();
+}
+
+// -------------------------------------------------------------
+// SELECTOR Y MODELOS 3D DE VEHICULO
+// -------------------------------------------------------------
+
+void drawVehicleModel() {
+  switch (activeProfileId) {
+    case 1:
+      drawCivilianDroneModel();
+      break;
+    case 2:
+      // Perfil 2: Dron acrobático / FPV (próximo paso)
+      drawFlatBoardModel();
+      break;
+    case 3:
+      // Perfil 3: Cohete de lanzamiento
+      drawFlatBoardModel();
+      break;
+    case 4:
+      // Perfil 4: Misil de alta maniobra
+      drawFlatBoardModel();
+      break;
+    default:
+      drawCivilianDroneModel();
+      break;
+  }
+}
+
+/**
+ * Modelo 3D: Dron Civil Minimalista para Grabacion Aerea (Perfil 1: DRONE_HOVER)
+ * Diseno limpio, aerodinamico, estilo cuadricoptero de filmacion con gimbal 4K
+ */
+void drawCivilianDroneModel() {
+  // 1. Ejes de coordenadas del cuerpo (referencia discreta de navegacion)
+  strokeWeight(2);
+  stroke(255, 60, 60, 160); line(0, 0, 0, 0, 0, -90);  // X cuerpo / Proa (-Z Processing)
+  stroke(60, 255, 60, 160); line(0, 0, 0, 90, 0, 0);   // Y cuerpo / Estribor (+X Processing)
+  stroke(60, 120, 255, 160); line(0, 0, 0, 0, 50, 0);  // Z cuerpo / Abajo (+Y Processing)
+
+  // 2. Chasis / Fuselaje Central Aerodinamico
+  // Base inferior del vientre
+  fill(185, 192, 202);
+  stroke(130, 140, 155);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 5, 0);
+  box(32, 8, 76);
+  popMatrix();
+
+  // Modulo de posicionamiento optico inferior (Optical Flow + Sonar)
+  fill(30, 35, 42);
+  noStroke();
+  pushMatrix();
+  translate(0, 9.5f, 10);
+  box(14, 3, 18);
+  // Lentes del sensor de flujo optico
+  fill(0, 195, 235);
+  pushMatrix(); translate(-3.5f, 1.6f, 0); drawCylinder(1.8f, 1.8f, 0.5f, 12); popMatrix();
+  pushMatrix(); translate(3.5f, 1.6f, 0); drawCylinder(1.8f, 1.8f, 0.5f, 12); popMatrix();
+  popMatrix();
+
+  // Cubierta superior aerodinamica (Blanco satinado / Pearl White)
+  fill(238, 242, 246);
+  stroke(160, 175, 190);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, -3, 0);
+  box(34, 10, 80);
+  popMatrix();
+
+  // Bahia superior de bateria y bahia GPS (Gris grafito mate)
+  fill(42, 48, 56);
+  stroke(30, 35, 42);
+  pushMatrix();
+  translate(0, -9, 5);
+  box(24, 5, 50);
+  popMatrix();
+
+  // Indicadores LED de estado de bateria (4 micro-LEDs verdes en lomo)
+  noStroke();
+  fill(0, 255, 140);
+  for (int i = 0; i < 4; i++) {
+    pushMatrix();
+    translate(0, -12, 16 - i * 7);
+    box(4, 1.5f, 2.5f);
+    popMatrix();
+  }
+
+  // Morro frontal conico
+  fill(238, 242, 246);
+  stroke(160, 175, 190);
+  pushMatrix();
+  translate(0, -1, -47);
+  box(24, 9, 16);
+  popMatrix();
+
+  // Visor frontal con sensores estereoscopicos anticolision
+  fill(18, 22, 28);
+  noStroke();
+  pushMatrix();
+  translate(0, -1, -55.5f);
+  box(20, 5, 2);
+  // Sensores opticos estereo
+  fill(0, 200, 255);
+  pushMatrix(); translate(-6, 0, -1.2f); box(2.5f, 2.5f, 0.5f); popMatrix();
+  pushMatrix(); translate(6, 0, -1.2f); box(2.5f, 2.5f, 0.5f); popMatrix();
+  popMatrix();
+
+  // 3. Camara de Grabacion Gimbal Estabilizada 4K (bajo el morro frontal)
+  drawGimbalCamera(0, 8, -34);
+
+  // 4. Cuatro Brazos Diagonales en configuracion 'X' aerodinamica
+  // Delantero Izquierdo y Derecho
+  drawSleekArm(-12, 0, -18, -75, -2, -55, 10, 7);
+  drawSleekArm(12, 0, -18, 75, -2, -55, 10, 7);
+  // Trasero Izquierdo y Derecho
+  drawSleekArm(-12, 0, 18, -70, -2, 60, 10, 7);
+  drawSleekArm(12, 0, 18, 70, -2, 60, 10, 7);
+
+  // 5. Motores, Helices Giratorias y Luces de Navegacion Aerea
+  // Delantero Izquierdo (FL) - CW (Giro horario), LED Rojo de babor
+  drawPropellerAssembly(-75, -4, -55, propAngle, true);
+  drawLandingGearAndNavLed(-75, 0, -55, color(255, 40, 40));
+
+  // Delantero Derecho (FR) - CCW (Giro antihorario), LED Verde de estribor
+  drawPropellerAssembly(75, -4, -55, propAngle, false);
+  drawLandingGearAndNavLed(75, 0, -55, color(40, 255, 70));
+
+  // Trasero Izquierdo (RL) - CCW, LED Ambar de cola
+  drawPropellerAssembly(-70, -4, 60, propAngle, false);
+  drawLandingGearAndNavLed(-70, 0, 60, color(255, 200, 40));
+
+  // Trasero Derecho (RR) - CW, LED Ambar de cola
+  drawPropellerAssembly(70, -4, 60, propAngle, true);
+  drawLandingGearAndNavLed(70, 0, 60, color(255, 200, 40));
+}
+
+// -------------------------------------------------------------
+// SUBCOMPONENTES DEL MODELO 3D
+// -------------------------------------------------------------
+
+void drawSleekArm(float x1, float y1, float z1, float x2, float y2, float z2, float w, float h) {
+  pushMatrix();
+  float mx = (x1 + x2) * 0.5f;
+  float my = (y1 + y2) * 0.5f;
+  float mz = (z1 + z2) * 0.5f;
+  translate(mx, my, mz);
+
+  float dx = x2 - x1;
+  float dy = y2 - y1;
+  float dz = z2 - z1;
+  float len = sqrt(dx*dx + dy*dy + dz*dz);
+
+  float yaw = atan2(dx, dz);
+  float pitch = -atan2(dy, sqrt(dx*dx + dz*dz));
+
+  rotateY(yaw);
+  rotateX(pitch);
+
+  // Cubierta superior blanca del brazo
+  fill(230, 235, 240);
+  stroke(140, 155, 170);
+  strokeWeight(1);
+  box(w, h * 0.65f, len);
+
+  // Insercion inferior de refuerzo de carbono
+  fill(38, 44, 52);
+  noStroke();
+  pushMatrix();
+  translate(0, h * 0.35f, 0);
+  box(w * 0.8f, h * 0.4f, len * 0.95f);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawPropellerAssembly(float x, float y, float z, float angle, boolean isCW) {
+  pushMatrix();
+  translate(x, y, z);
+
+  // Carcasa del estator del motor sin escobillas (Brushless)
+  fill(55, 60, 68);
+  stroke(30, 35, 40);
+  strokeWeight(1);
+  drawCylinder(8, 8, 10, 16);
+
+  // Campana rotorica de aluminio superior
+  fill(85, 92, 102);
+  pushMatrix();
+  translate(0, -5, 0);
+  drawCylinder(8.5f, 8.5f, 4, 16);
+  popMatrix();
+
+  // Helice giratoria con palas aerodinamicas plegables
+  pushMatrix();
+  translate(0, -8, 0);
+  rotateY(isCW ? angle : -angle);
+
+  // Tapa central del buje
+  fill(30, 34, 40);
+  noStroke();
+  drawCylinder(3.5f, 3.5f, 4, 12);
+
+  // 2 Palas aerodinamicas opuestas
+  for (int b = 0; b < 2; b++) {
+    pushMatrix();
+    rotateY(b * PI);
+
+    // Cuerpo de la pala de carbono
+    fill(35, 40, 48, 230);
+    stroke(20, 24, 30);
+    strokeWeight(0.8f);
+    pushMatrix();
+    translate(0, 0, 18);
+    rotateX(radians(7)); // Angulo de ataque aerodinamico
+    box(7, 1.2f, 26);
+    popMatrix();
+
+    // Puntas de pala de alta visibilidad naranja
+    fill(255, 140, 20);
+    noStroke();
+    pushMatrix();
+    translate(0, 0, 34);
+    rotateX(radians(7));
+    box(6, 1.2f, 8);
+    popMatrix();
+
+    popMatrix();
+  }
+  popMatrix();
+
+  // Halo translucido de disco de rotor en giro (efecto desenfoque de movimiento)
+  noStroke();
+  fill(0, 210, 255, 20);
+  pushMatrix();
+  translate(0, -8, 0);
+  drawCylinder(38, 38, 1, 24);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawLandingGearAndNavLed(float x, float y, float z, int ledColor) {
+  pushMatrix();
+  translate(x, y, z);
+
+  // Pata de aterrizaje y amortiguador
+  fill(40, 45, 52);
+  stroke(25, 30, 36);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 10, 0);
+  box(6, 14, 7);
+  popMatrix();
+
+  // Diodo LED de navegacion y emisor
+  noStroke();
+  fill(ledColor);
+  pushMatrix();
+  translate(0, 17, 0);
+  box(4, 2, 4);
+
+  // Halo difuso de luz
+  fill(ledColor, 60);
+  drawCylinder(6, 6, 2, 12);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawGimbalCamera(float x, float y, float z) {
+  pushMatrix();
+  translate(x, y, z);
+
+  // Base del gimbal bajo el morro
+  fill(45, 50, 58);
+  stroke(25, 30, 36);
+  strokeWeight(1);
+  drawCylinder(5, 5, 4, 12);
+
+  // Horquilla / brazo de balanceo del gimbal
+  pushMatrix();
+  translate(0, 5, 0);
+  fill(40, 45, 52);
+  box(18, 4, 8);
+  popMatrix();
+
+  // Cuerpo de camara con inclinacion cinematografica (-12 grados hacia abajo)
+  pushMatrix();
+  translate(0, 11, -2);
+  rotateX(radians(12));
+
+  fill(28, 32, 38);
+  stroke(50, 58, 68);
+  strokeWeight(1);
+  box(16, 13, 18);
+
+  // Bisel exterior de la lente de grabacion
+  fill(20, 22, 26);
+  pushMatrix();
+  translate(0, 0, -10);
+  rotateX(HALF_PI);
+  drawCylinder(5.5f, 5.5f, 4, 16);
+
+  // Elemento de cristal optico con reflejo cian
+  fill(0, 195, 235);
+  noStroke();
+  pushMatrix();
+  translate(0, -2.1f, 0);
+  drawCylinder(4.2f, 4.2f, 0.5f, 16);
+  popMatrix();
+  popMatrix();
+
+  // Micro-LED de grabacion en curso (Tally light rojo)
+  fill(255, 30, 30);
+  noStroke();
+  pushMatrix();
+  translate(5.5f, -4, -9.5f);
+  box(1.5f, 1.5f, 1.5f);
+  popMatrix();
+
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawCylinder(float rTop, float rBottom, float h, int sides) {
+  float angleStep = TWO_PI / sides;
+
+  // Superficie lateral cilindrica
+  beginShape(QUAD_STRIP);
+  for (int i = 0; i <= sides; i++) {
+    float a = i * angleStep;
+    float ca = cos(a);
+    float sa = sin(a);
+    vertex(ca * rTop, -h * 0.5f, sa * rTop);
+    vertex(ca * rBottom, h * 0.5f, sa * rBottom);
+  }
+  endShape();
+
+  // Tapa superior
+  if (rTop > 0) {
+    beginShape(TRIANGLE_FAN);
+    vertex(0, -h * 0.5f, 0);
+    for (int i = 0; i <= sides; i++) {
+      float a = i * angleStep;
+      vertex(cos(a) * rTop, -h * 0.5f, sin(a) * rTop);
+    }
+    endShape();
+  }
+
+  // Tapa inferior
+  if (rBottom > 0) {
+    beginShape(TRIANGLE_FAN);
+    vertex(0, h * 0.5f, 0);
+    for (int i = 0; i <= sides; i++) {
+      float a = i * angleStep;
+      vertex(cos(a) * rBottom, h * 0.5f, sin(a) * rBottom);
+    }
+    endShape();
+  }
 }
 
 void drawFlatBoardModel() {
@@ -771,22 +1143,42 @@ void handleReceivedPacket(int msgId, byte[] payload, int len) {
     bistProgressPct = payload[1] & 0xFF;
     currentUiState = UI_STATE_BIST_CALIBRATION;
   } else if (msgId == MSG_ESTIMATOR_TELEMETRY && len >= 74) {
-    q0 = readFloatLE(payload, 4);
-    q1 = readFloatLE(payload, 8);  // IMU X (Alabeo / Roll)
-    q2 = readFloatLE(payload, 12); // IMU Y (Cabeceo / Pitch)
-    q3 = readFloatLE(payload, 16); // IMU Z (Guiñada / Yaw)
+    float inQ0 = readFloatLE(payload, 4);
+    float inQ1 = readFloatLE(payload, 8);  // IMU X (Alabeo / Roll)
+    float inQ2 = readFloatLE(payload, 12); // IMU Y (Cabeceo / Pitch)
+    float inQ3 = readFloatLE(payload, 16); // IMU Z (Guiñada / Yaw)
 
-    rollDeg  = readFloatLE(payload, 20); // Roll (Alabeo lateral)
-    pitchDeg = readFloatLE(payload, 24); // Pitch (Cabeceo morro)
-    yawDeg   = readFloatLE(payload, 28); // Yaw (Guiñada / brújula)
+    if (!Float.isNaN(inQ0) && !Float.isNaN(inQ1) && !Float.isNaN(inQ2) && !Float.isNaN(inQ3) &&
+        !Float.isInfinite(inQ0) && !Float.isInfinite(inQ1) && !Float.isInfinite(inQ2) && !Float.isInfinite(inQ3)) {
+      q0 = inQ0; q1 = inQ1; q2 = inQ2; q3 = inQ3;
+    }
 
-    gyroDpsX = readFloatLE(payload, 32);
-    gyroDpsY = readFloatLE(payload, 36);
-    gyroDpsZ = readFloatLE(payload, 40);
+    float inR = readFloatLE(payload, 20); // Roll (Alabeo lateral)
+    float inP = readFloatLE(payload, 24); // Pitch (Cabeceo morro)
+    float inY = readFloatLE(payload, 28); // Yaw (Guiñada / brújula)
 
-    accelGX  = readFloatLE(payload, 44);
-    accelGY  = readFloatLE(payload, 48);
-    accelGZ  = readFloatLE(payload, 52);
+    if (!Float.isNaN(inR) && !Float.isNaN(inP) && !Float.isNaN(inY) &&
+        !Float.isInfinite(inR) && !Float.isInfinite(inP) && !Float.isInfinite(inY)) {
+      rollDeg = inR; pitchDeg = inP; yawDeg = inY;
+    }
+
+    float inGx = readFloatLE(payload, 32);
+    float inGy = readFloatLE(payload, 36);
+    float inGz = readFloatLE(payload, 40);
+
+    if (!Float.isNaN(inGx) && !Float.isNaN(inGy) && !Float.isNaN(inGz) &&
+        !Float.isInfinite(inGx) && !Float.isInfinite(inGy) && !Float.isInfinite(inGz)) {
+      gyroDpsX = inGx; gyroDpsY = inGy; gyroDpsZ = inGz;
+    }
+
+    float inAx = readFloatLE(payload, 44);
+    float inAy = readFloatLE(payload, 48);
+    float inAz = readFloatLE(payload, 52);
+
+    if (!Float.isNaN(inAx) && !Float.isNaN(inAy) && !Float.isNaN(inAz) &&
+        !Float.isInfinite(inAx) && !Float.isInfinite(inAy) && !Float.isInfinite(inAz)) {
+      accelGX = inAx; accelGY = inAy; accelGZ = inAz;
+    }
 
     wcetCycles = readUint32LE(payload, 56);
     wcetUs     = readFloatLE(payload, 60);
@@ -830,9 +1222,15 @@ float readFloatLE(byte[] b, int offset) {
 }
 
 void applyQuaternionRotation(float w, float x, float y, float z) {
+  // Guardas estrictas anti-NaN y anti-Infinito para proteger el pipeline OpenGL
+  if (Float.isNaN(w) || Float.isNaN(x) || Float.isNaN(y) || Float.isNaN(z) ||
+      Float.isInfinite(w) || Float.isInfinite(x) || Float.isInfinite(y) || Float.isInfinite(z)) {
+    return;
+  }
+
   // Normalizar cuaternion para renderizado seguro
   float norm = sqrt(w*w + x*x + y*y + z*z);
-  if (norm < 1e-6f) return;
+  if (Float.isNaN(norm) || Float.isInfinite(norm) || norm < 1e-6f) return;
   w /= norm; x /= norm; y /= norm; z /= norm;
 
   // Convertir cuaternion a matriz de rotacion 3D estandar

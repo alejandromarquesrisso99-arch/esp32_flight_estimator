@@ -25,6 +25,7 @@ public:
 
     bool useAdaptiveR{true};    // Habilitar escalado dinamico de R (rechazo de aceleraciones parasitas)
     float adaptiveAlpha{15.0f}; // Factor de penalizacion ante aceleraciones no gravitatorias
+    bool isStationary{false};    // Indicador de reposo estatico para eliminacion de deriva (ZUPT / Zero-Motion Gate)
 
     ExtendedKalmanFilter();
 

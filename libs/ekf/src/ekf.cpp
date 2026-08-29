@@ -78,18 +78,34 @@ void ExtendedKalmanFilter::setAdaptiveR(bool enable, float alpha) {
 
 void ExtendedKalmanFilter::predict(const Vector3f& gyro, float dt) {
     // Guarda de dominio: dt debe ser estrictamente positivo y acotado (DO-178C Robustness)
-    if (dt <= 0.0f || dt > 1.0f) {
+    if (dt <= 0.0f || dt > 1.0f || !std::isfinite(dt)) {
         return;
     }
 
     // 1. Extraer estado actual
     float q0 = x(0), q1 = x(1), q2 = x(2), q3 = x(3);
-    float bx = x(4), by = x(5);
+    float bx = x(4), by = x(5), bz = x(6);
 
-    // 2. Corregir velocidades angulares restando el sesgo estimado (bz inobservable en reposo)
+    // 2. Corregir velocidades angulares restando el sesgo estimado
     float wx = gyro(0) - bx;
     float wy = gyro(1) - by;
-    float wz = gyro(2);
+    float wz = gyro(2) - bz;
+
+    // Filtro Zero-Motion Noise Gate: eliminar ruido residual si está en reposo o por debajo del umbral de ruido
+    float gyro_norm = std::sqrt(wx * wx + wy * wy + wz * wz);
+    constexpr float NOISE_THRESHOLD_RADS = 0.0018f; // ~0.10 deg/s (umbral de piso de ruido térmico)
+
+    if (isStationary || gyro_norm < NOISE_THRESHOLD_RADS) {
+        // En reposo estático, suprimir integración de ruido para eliminar deriva residual de Yaw
+        wx = 0.0f;
+        wy = 0.0f;
+        wz = 0.0f;
+
+        // Seguimiento suave del sesgo residual de Yaw en reposo
+        if (isStationary) {
+            x(6) += 0.001f * (gyro(2) - x(6));
+        }
+    }
 
     float halfDt = 0.5f * dt;
 
@@ -110,10 +126,10 @@ void ExtendedKalmanFilter::predict(const Vector3f& gyro, float dt) {
     F_mat(3, 0) =  halfDt * wz;  F_mat(3, 1) =  halfDt * wy;  F_mat(3, 2) = -halfDt * wx;
 
     // Bloque F_qb (4x3): derivadas con respecto al sesgo (d_omega/d_bias = -1)
-    F_mat(0, 4) =  halfDt * q1;  F_mat(0, 5) =  halfDt * q2;  F_mat(0, 6) =  0.0f;
-    F_mat(1, 4) = -halfDt * q0;  F_mat(1, 5) =  halfDt * q3;  F_mat(1, 6) =  0.0f;
-    F_mat(2, 4) = -halfDt * q3;  F_mat(2, 5) = -halfDt * q0;  F_mat(2, 6) =  0.0f;
-    F_mat(3, 4) =  halfDt * q2;  F_mat(3, 5) = -halfDt * q1;  F_mat(3, 6) =  0.0f;
+    F_mat(0, 4) =  halfDt * q1;  F_mat(0, 5) =  halfDt * q2;  F_mat(0, 6) =  halfDt * q3;
+    F_mat(1, 4) = -halfDt * q0;  F_mat(1, 5) =  halfDt * q3;  F_mat(1, 6) = -halfDt * q2;
+    F_mat(2, 4) = -halfDt * q3;  F_mat(2, 5) = -halfDt * q0;  F_mat(2, 6) =  halfDt * q1;
+    F_mat(3, 4) =  halfDt * q2;  F_mat(3, 5) = -halfDt * q1;  F_mat(3, 6) = -halfDt * q0;
 
     // 5. Propagación incondicional de la covarianza de error: P = F * P * F^T + Q * dt
     // En reposo (wx=wy=wz=0), F_mat = I y P = P + Q * dt, manteniendo la consistencia independiente de la frecuencia

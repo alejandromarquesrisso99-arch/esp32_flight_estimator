@@ -229,6 +229,30 @@ void test_ekf_full_3d_attitude_tracking() {
     std::cout << "  -> Simulacion de vuelo 3D superada con exito." << std::endl;
 }
 
+void test_ekf_zero_motion_noise_gate() {
+    std::cout << "[PRUEBA EKF] Supresion de deriva por ruido termico en reposo (Zero-Motion Gate)..." << std::endl;
+
+    ExtendedKalmanFilter ekf;
+    ekf.setProfile(FlightProfileId::DRONE_HOVER);
+
+    // Inyectar ruido termico residual tipico en Z (+0.05 dps = 0.00087 rad/s)
+    Vector3f residual_noise{0.0005f, -0.0004f, 0.00087f};
+    ekf.isStationary = true;
+
+    // Ejecutar 500 pasos de prediccion (2.5 segundos)
+    for (size_t i = 0; i < 500; ++i) {
+        ekf.predict(residual_noise, 0.005f);
+    }
+
+    // En reposo estatico, el cuaternion debe permanecer estrictamente inalterado (sin deriva de Yaw)
+    assert(ekf.x(0) == 1.0f);
+    assert(ekf.x(1) == 0.0f);
+    assert(ekf.x(2) == 0.0f);
+    assert(ekf.x(3) == 0.0f);
+
+    std::cout << "  -> Supresion de deriva en reposo estatico superada con exito." << std::endl;
+}
+
 int main() {
     std::cout << "============================================" << std::endl;
     std::cout << "    Pruebas Unitarias del EKF 7D (PC)       " << std::endl;
@@ -241,6 +265,7 @@ int main() {
     test_ekf_anti_nan_robustness();
     test_ekf_domain_guards();
     test_ekf_full_3d_attitude_tracking();
+    test_ekf_zero_motion_noise_gate();
 
     std::cout << "\n>>> TODAS LAS PRUEBAS DEL EKF PASARON CON EXITO! <<<\n" << std::endl;
     return 0;

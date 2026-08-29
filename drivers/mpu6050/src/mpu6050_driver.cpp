@@ -34,14 +34,14 @@ esp_err_t MPU6050Driver::write_reg(uint8_t reg, uint8_t val) {
         return ESP_ERR_INVALID_STATE;
     }
     const uint8_t write_buf[2] = {reg, val};
-    return i2c_master_transmit(s_dev_handle, write_buf, sizeof(write_buf), 50);
+    return i2c_master_transmit(s_dev_handle, write_buf, sizeof(write_buf), 4);
 }
 
 esp_err_t MPU6050Driver::read_regs(uint8_t reg, uint8_t* buffer, size_t len) {
     if (s_dev_handle == nullptr) {
         return ESP_ERR_INVALID_STATE;
     }
-    return i2c_master_transmit_receive(s_dev_handle, &reg, 1, buffer, len, 50);
+    return i2c_master_transmit_receive(s_dev_handle, &reg, 1, buffer, len, 4);
 }
 
 esp_err_t MPU6050Driver::verify_who_am_i() {
@@ -156,8 +156,8 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
     write_reg(REG_ACCEL_CONFIG, static_cast<uint8_t>(accel_fs_sel << 3));
 
     // 11. Configurar pin de interrupcion hardware (registro INT_PIN_CFG 0x37)
-    // Bit 5 = LATCH_INT_EN (1 = retener nivel alto hasta lectura I2C), Bit 4 = INT_RD_CLEAR (1 = limpiar con cualquier lectura)
-    write_reg(REG_INT_PIN_CFG, 0x30);
+    // 0x00 = Nivel activo alto, salida push-pull, modo pulso de 50us (previene bloqueo de flancos perdidos)
+    write_reg(REG_INT_PIN_CFG, 0x00);
 
     // 12. Habilitar interrupcion por dato listo Data Ready (registro INT_ENABLE 0x38)
     write_reg(REG_INT_ENABLE, 0x01);
@@ -303,6 +303,20 @@ const CalibrationData& MPU6050Driver::get_calibration() {
 
 bool MPU6050Driver::is_initialized() {
     return s_is_initialized;
+}
+
+esp_err_t MPU6050Driver::reset_signal_path() {
+    if (s_dev_handle == nullptr) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    // Reiniciar acondicionamiento analogico y filtros digitales de los 3 ejes
+    // Registro SIGNAL_PATH_RESET (0x68): bits 2, 1, 0 = ACCEL_RST, GYRO_RST, TEMP_RST
+    write_reg(REG_SIGNAL_PATH_RESET, 0x07);
+
+    // Registro USER_CTRL (0x6A): bit 0 = SIG_COND_RST (restablece bloques digitales)
+    write_reg(REG_USER_CTRL, 0x01);
+
+    return ESP_OK;
 }
 
 } // namespace drivers

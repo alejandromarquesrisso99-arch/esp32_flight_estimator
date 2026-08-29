@@ -13,7 +13,9 @@ namespace flight {
  */
 class FDIRManager {
 public:
-    static constexpr uint32_t MAX_CONSECUTIVE_I2C_ERRORS = 5;
+    static constexpr uint32_t MAX_CONSECUTIVE_I2C_ERRORS = 25; ///< Tolerancia de rebote mecánico transitorio (~50ms) antes de HARD_FAULT
+    static constexpr uint32_t MAX_STUCK_SAMPLES          = 25; ///< Muestras consecutivas idénticas para declarar sensor congelado
+    static constexpr uint32_t NOMINAL_STABILITY_SAMPLES  = 20; ///< Muestras nominales para desenganchar bandera de anomalía
 
     /**
      * @brief Inicializa los umbrales de supervisión FDIR según el perfil de vuelo activo
@@ -25,7 +27,7 @@ public:
      * @param scaled Mediciones calibradas del sensor
      * @param dt Intervalo de tiempo transcurrido desde la última muestra
      * @param health_flags Máscara atómica de banderas de salud del sistema
-     * @return true si la muestra es segura para procesar, false si está corrupta
+     * @return true si la muestra es segura para procesar, false si está corrupta o el sensor está congelado
      */
     static bool process_sample(const drivers::InertialScaledData& scaled, float dt, std::atomic<uint32_t>& health_flags);
 
@@ -50,12 +52,23 @@ public:
     static void register_i2c_success();
 
     /**
+     * @brief Comprueba si el sensor se encuentra congelado (datos estancados sin ruido físico)
+     */
+    static bool is_sensor_stuck();
+
+    /**
+     * @brief Notifica al FDIR que se ha ejecutado un reinicio de recuperación de señal en el sensor
+     */
+    static void notify_recovery_performed();
+
+    /**
      * @brief Métodos de acceso a contadores de diagnóstico
      */
     static uint32_t get_consecutive_i2c_errors();
     static uint32_t get_high_g_event_count();
     static uint32_t get_anomaly_count();
     static uint32_t get_jitter_warning_count();
+    static uint32_t get_stuck_data_count();
     static void     reset_diagnostics();
 
 private:
@@ -66,6 +79,12 @@ private:
     static uint32_t        s_high_g_event_count;
     static uint32_t        s_anomaly_count;
     static uint32_t        s_jitter_warning_count;
+    static uint32_t        s_stuck_samples_count;
+    static uint32_t        s_nominal_samples_count;
+    static uint32_t        s_stuck_event_count;
+    static bool            s_sensor_stuck;
+    static float           s_last_gyro_dps[3];
+    static float           s_last_accel_g[3];
 };
 
 } // namespace flight

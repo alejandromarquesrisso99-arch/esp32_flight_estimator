@@ -116,19 +116,38 @@ void gnc_task_run(void* pvParameters) {
         }
 
         // 4. Verificación de salud y límites dinámicos FDIR
-        FDIRManager::process_sample(scaled, dt, g_health_flags);
+        bool sample_ok = FDIRManager::process_sample(scaled, dt, g_health_flags);
+
+        // Si se detecta sensor congelado por impacto mecánico, disparar reinicio de ruta de señal del MPU6050
+        if (FDIRManager::is_sensor_stuck()) {
+            drivers::MPU6050Driver::reset_signal_path();
+            FDIRManager::notify_recovery_performed();
+            ESP_LOGW(TAG, "Sensor estancado detectado por FDIR: ejecutado reset de ruta de senal");
+        }
 
         // 5. Medición de WCET con contador de ciclos de CPU hardware
         uint32_t cycle_start = esp_cpu_get_cycle_count();
 
         // 6. Paso de Predicción del EKF: propagación cinemática del cuaternión y covarianza P
-        Vector3f gyro_vec{scaled.gyro_rads[0], scaled.gyro_rads[1], scaled.gyro_rads[2]};
-        s_ekf.predict(gyro_vec, dt);
+        if (sample_ok) {
+            Vector3f gyro_vec{scaled.gyro_rads[0], scaled.gyro_rads[1], scaled.gyro_rads[2]};
 
-        // 7. Paso de Actualización del EKF: corrección por vector de gravedad con G-Gating
-        if (FDIRManager::should_fuse_accelerometer(scaled, g_health_flags)) {
-            Vector3f accel_vec{scaled.accel_mss[0], scaled.accel_mss[1], scaled.accel_mss[2]};
-            s_ekf.update(accel_vec);
+            // Detección de reposo estático (ZUPT) para eliminar deriva de Yaw en reposo
+            float accel_mag = std::sqrt(scaled.accel_g[0]*scaled.accel_g[0] + 
+                                        scaled.accel_g[1]*scaled.accel_g[1] + 
+                                        scaled.accel_g[2]*scaled.accel_g[2]);
+            float gyro_mag = std::sqrt(scaled.gyro_dps[0]*scaled.gyro_dps[0] + 
+                                       scaled.gyro_dps[1]*scaled.gyro_dps[1] + 
+                                       scaled.gyro_dps[2]*scaled.gyro_dps[2]);
+            s_ekf.isStationary = (std::abs(accel_mag - 1.0f) < 0.035f && gyro_mag < 0.15f);
+
+            s_ekf.predict(gyro_vec, dt);
+
+            // 7. Paso de Actualización del EKF: corrección por vector de gravedad con G-Gating
+            if (FDIRManager::should_fuse_accelerometer(scaled, g_health_flags)) {
+                Vector3f accel_vec{scaled.accel_mss[0], scaled.accel_mss[1], scaled.accel_mss[2]};
+                s_ekf.update(accel_vec);
+            }
         }
 
         uint32_t cycle_end = esp_cpu_get_cycle_count();

@@ -17,6 +17,12 @@ uint32_t        FDIRManager::s_consecutive_i2c_errors  = 0;
 uint32_t        FDIRManager::s_high_g_event_count      = 0;
 uint32_t        FDIRManager::s_anomaly_count           = 0;
 uint32_t        FDIRManager::s_jitter_warning_count    = 0;
+uint32_t        FDIRManager::s_stuck_samples_count     = 0;
+uint32_t        FDIRManager::s_nominal_samples_count   = 0;
+uint32_t        FDIRManager::s_stuck_event_count       = 0;
+bool            FDIRManager::s_sensor_stuck            = false;
+float           FDIRManager::s_last_gyro_dps[3]        = {-9999.0f, -9999.0f, -9999.0f};
+float           FDIRManager::s_last_accel_g[3]         = {-9999.0f, -9999.0f, -9999.0f};
 
 void FDIRManager::init(FlightProfileId profile) {
     s_active_profile = profile;
@@ -33,6 +39,7 @@ bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, floa
     }
 
     bool sample_valid = true;
+    bool anomaly_in_this_sample = false;
 
     // 1. Verificacion de rango dinamico y saturacion del giroscopo
     float gyro_mag_dps = std::sqrt(scaled.gyro_dps[0] * scaled.gyro_dps[0] +
@@ -43,6 +50,7 @@ bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, floa
     if (gyro_mag_dps > max_allowed_dps || std::isnan(gyro_mag_dps) || std::isinf(gyro_mag_dps)) {
         s_anomaly_count = s_anomaly_count + 1;
         health_flags.fetch_or(HEALTH_FLAG_ANOMALY_DETECTED, std::memory_order_relaxed);
+        anomaly_in_this_sample = true;
         sample_valid = false;
     }
 
@@ -51,6 +59,46 @@ bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, floa
     if (dt > 2.0f * nominal_dt || dt < 0.2f * nominal_dt) {
         s_jitter_warning_count = s_jitter_warning_count + 1;
         health_flags.fetch_or(HEALTH_FLAG_ANOMALY_DETECTED, std::memory_order_relaxed);
+        anomaly_in_this_sample = true;
+    }
+
+    // 3. Supervisor de sensor congelado / datos estancados (Stuck-Data Watchdog)
+    bool is_identical = (scaled.gyro_dps[0] == s_last_gyro_dps[0] &&
+                         scaled.gyro_dps[1] == s_last_gyro_dps[1] &&
+                         scaled.gyro_dps[2] == s_last_gyro_dps[2] &&
+                         scaled.accel_g[0]  == s_last_accel_g[0] &&
+                         scaled.accel_g[1]  == s_last_accel_g[1] &&
+                         scaled.accel_g[2]  == s_last_accel_g[2]);
+
+    s_last_gyro_dps[0] = scaled.gyro_dps[0];
+    s_last_gyro_dps[1] = scaled.gyro_dps[1];
+    s_last_gyro_dps[2] = scaled.gyro_dps[2];
+    s_last_accel_g[0]  = scaled.accel_g[0];
+    s_last_accel_g[1]  = scaled.accel_g[1];
+    s_last_accel_g[2]  = scaled.accel_g[2];
+
+    if (is_identical) {
+        s_stuck_samples_count++;
+        if (s_stuck_samples_count >= MAX_STUCK_SAMPLES) {
+            s_sensor_stuck = true;
+            s_stuck_event_count++;
+            health_flags.fetch_or(HEALTH_FLAG_ANOMALY_DETECTED, std::memory_order_relaxed);
+            anomaly_in_this_sample = true;
+            sample_valid = false;
+        }
+    } else {
+        s_stuck_samples_count = 0;
+        s_sensor_stuck = false;
+    }
+
+    // 4. Filtro de desenganche automatico de anomalias
+    if (!anomaly_in_this_sample) {
+        s_nominal_samples_count++;
+        if (s_nominal_samples_count >= NOMINAL_STABILITY_SAMPLES) {
+            health_flags.fetch_and(~static_cast<uint32_t>(HEALTH_FLAG_ANOMALY_DETECTED), std::memory_order_relaxed);
+        }
+    } else {
+        s_nominal_samples_count = 0;
     }
 
     return sample_valid;
@@ -103,6 +151,22 @@ void FDIRManager::register_i2c_success() {
     s_consecutive_i2c_errors = 0;
 }
 
+bool FDIRManager::is_sensor_stuck() {
+    return s_sensor_stuck;
+}
+
+void FDIRManager::notify_recovery_performed() {
+    s_stuck_samples_count = 0;
+    s_sensor_stuck = false;
+    s_nominal_samples_count = 0;
+    s_last_gyro_dps[0] = -9999.0f;
+    s_last_gyro_dps[1] = -9999.0f;
+    s_last_gyro_dps[2] = -9999.0f;
+    s_last_accel_g[0]  = -9999.0f;
+    s_last_accel_g[1]  = -9999.0f;
+    s_last_accel_g[2]  = -9999.0f;
+}
+
 uint32_t FDIRManager::get_consecutive_i2c_errors() {
     return s_consecutive_i2c_errors;
 }
@@ -119,11 +183,25 @@ uint32_t FDIRManager::get_jitter_warning_count() {
     return s_jitter_warning_count;
 }
 
+uint32_t FDIRManager::get_stuck_data_count() {
+    return s_stuck_event_count;
+}
+
 void FDIRManager::reset_diagnostics() {
     s_consecutive_i2c_errors = 0;
     s_high_g_event_count     = 0;
     s_anomaly_count          = 0;
     s_jitter_warning_count   = 0;
+    s_stuck_samples_count    = 0;
+    s_nominal_samples_count  = 0;
+    s_stuck_event_count      = 0;
+    s_sensor_stuck           = false;
+    s_last_gyro_dps[0] = -9999.0f;
+    s_last_gyro_dps[1] = -9999.0f;
+    s_last_gyro_dps[2] = -9999.0f;
+    s_last_accel_g[0]  = -9999.0f;
+    s_last_accel_g[1]  = -9999.0f;
+    s_last_accel_g[2]  = -9999.0f;
 }
 
 } // namespace flight

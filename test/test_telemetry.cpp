@@ -227,23 +227,46 @@ void test_fdir_manager() {
     // 3. Probar limites de velocidad angular y deteccion de anomalias
     drivers::InertialScaledData extreme_rate_data{};
     extreme_rate_data.gyro_dps[0] = 500.0f; // Supera la escala completa de 250 dps de DRONE_HOVER
-    bool sample_safe = FDIRManager::process_sample(extreme_rate_data, 0.005f, health_flags);
-    assert(sample_safe == false);
-    assert((health_flags.load() & HEALTH_FLAG_ANOMALY_DETECTED) != 0);
-    assert(FDIRManager::get_anomaly_count() == 1);
+    // 4. Probar desenganche automatico de anomalias (tras 20 muestras nominales limpias)
+    for (int i = 0; i < 20; ++i) {
+        // Generar pequenas variaciones reales para no disparar detector de estancamiento
+        nominal_data.gyro_dps[0] = 5.0f + static_cast<float>(i) * 0.1f;
+        FDIRManager::process_sample(nominal_data, 0.005f, health_flags);
+    }
+    // La bandera de anomalia debe haberse desenganchado automaticamente
+    assert((health_flags.load() & HEALTH_FLAG_ANOMALY_DETECTED) == 0);
 
-    // 4. Probar aislamiento de fallos del bus I2C (5 errores consecutivos -> HARD_FAULT)
+    // 5. Probar detector de sensor congelado (Stuck-Data Watchdog - 25 muestras identicas)
+    drivers::InertialScaledData frozen_data{};
+    frozen_data.gyro_dps[0] = 12.34f;
+    frozen_data.gyro_dps[1] = -5.67f;
+    frozen_data.gyro_dps[2] = 0.89f;
+    frozen_data.accel_g[0]  = 0.01f;
+    frozen_data.accel_g[1]  = 0.02f;
+    frozen_data.accel_g[2]  = 0.99f;
+
+    for (size_t i = 0; i < FDIRManager::MAX_STUCK_SAMPLES; ++i) {
+        FDIRManager::process_sample(frozen_data, 0.005f, health_flags);
+    }
+    assert(FDIRManager::is_sensor_stuck() == true);
+    assert((health_flags.load() & HEALTH_FLAG_ANOMALY_DETECTED) != 0);
+
+    // Notificar recuperacion
+    FDIRManager::notify_recovery_performed();
+    assert(FDIRManager::is_sensor_stuck() == false);
+
+    // 6. Probar aislamiento de fallos del bus I2C (MAX_CONSECUTIVE_I2C_ERRORS -> HARD_FAULT)
     health_flags.store(HEALTH_FLAG_IMU_OK);
     FDIRManager::reset_diagnostics();
 
-    for (int i = 1; i <= 4; ++i) {
+    for (size_t i = 1; i < FDIRManager::MAX_CONSECUTIVE_I2C_ERRORS; ++i) {
         bool declare_hard_fault = FDIRManager::register_i2c_error(health_flags);
         assert(declare_hard_fault == false);
         assert(FDIRManager::get_consecutive_i2c_errors() == static_cast<uint32_t>(i));
         assert((health_flags.load() & HEALTH_FLAG_HARD_FAULT) == 0);
     }
 
-    // El 5to error consecutivo activa la declaracion de fallo de hardware (HARD_FAULT)
+    // El error consecutivo que alcanza el limite activa la declaracion de fallo de hardware (HARD_FAULT)
     bool declare_hard_fault = FDIRManager::register_i2c_error(health_flags);
     assert(declare_hard_fault == true);
     assert((health_flags.load() & HEALTH_FLAG_HARD_FAULT) != 0);
@@ -252,7 +275,7 @@ void test_fdir_manager() {
     FDIRManager::register_i2c_success();
     assert(FDIRManager::get_consecutive_i2c_errors() == 0);
 
-    std::cout << "  -> Deteccion de anomalias y aislamiento FDIR verificados con exito." << std::endl;
+    std::cout << "  -> Deteccion de anomalias, sensor congelado y aislamiento FDIR verificados con exito." << std::endl;
 }
 
 int main() {

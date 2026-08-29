@@ -128,6 +128,11 @@ public:
      */
     static bool is_initialized();
 
+    /**
+     * @brief Reinicia la ruta de señal analógica y digital del sensor sin perder la configuración de registros
+     */
+    static esp_err_t reset_signal_path();
+
 private:
     static esp_err_t write_reg(uint8_t reg, uint8_t val);
     static esp_err_t read_regs(uint8_t reg, uint8_t* buffer, size_t len);
