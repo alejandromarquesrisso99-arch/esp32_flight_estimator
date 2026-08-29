@@ -9,7 +9,7 @@ namespace flight {
 namespace drivers {
 
 // Pin GPIO hardware por defecto para la linea INT / DRDY del MPU6050
-constexpr gpio_num_t DEFAULT_DRDY_GPIO = GPIO_NUM_19;
+constexpr gpio_num_t DEFAULT_DRDY_GPIO = GPIO_NUM_18;
 
 /**
  * @brief Inicializa el servicio de interrupciones GPIO para Data Ready (DRDY) del MPU6050

@@ -14,7 +14,7 @@ Sistema de referencia de actitud y rumbo (AHRS) de tiempo real duro basado en un
 ```mermaid
 flowchart TD
     subgraph Core_1 ["Núcleo 1: Dominio de Tiempo Real Duro (Prioridad 24)"]
-        DRDY["MPU6050 DRDY (GPIO 19)"] -->|"Notificación Directa ISR en IRAM"| GNC_Task["Tarea GNC (200 Hz - 1000 Hz)"]
+        DRDY["MPU6050 DRDY (GPIO 18)"] -->|"Notificación Directa ISR en IRAM"| GNC_Task["Tarea GNC (200 Hz - 1000 Hz)"]
         GPTimer["Respaldo GPTimer (1 MHz)"] -->|"Timeout 1.5x T_muestreo"| GNC_Task
         GNC_Task -->|"1. Lectura en Ráfaga (14 Bytes)"| MPU["Driver MPU6050 (Fast-Mode)"]
         GNC_Task -->|"2. Alimentar Watchdog"| Feed["timer_watchdog_feed()"]
@@ -48,7 +48,7 @@ flowchart TD
    * Propaga la cinemática de actitud y estima dinámicamente la deriva de sesgo del giróscopo.
    * **Actualización de Covarianza en Forma de Joseph** numéricamente estabilizada: $P_k = (I - K_k H_k) P_{k|k-1} (I - K_k H_k)^T + K_k R_k K_k^T$.
 4. **Sincronización Hardware y Respaldo de Seguridad:**
-   * Sincronización primaria: Señal física de interrupción `INT` (Data Ready) del MPU6050 en `GPIO 19` conectada a una ISR residente en IRAM.
+   * Sincronización primaria: Señal física de interrupción `INT` (Data Ready) del MPU6050 en `GPIO 18` conectada a una ISR residente en IRAM.
    * Sincronización secundaria: Temporizador por hardware `GPTimer` a 1 MHz configurado para autorrecarga a $1.5 \times T_{\text{muestreo}}$.
 5. **Detección, Aislamiento y Recuperación de Fallos (FDIR):**
    * **Rechazo de Aceleraciones No Gravitatorias (*G-Gating*):** Detecta aceleraciones dinámicas espurias ($|\|\vec{a}\| - 1g| > \text{umbral}$) y desacopla el acelerómetro del EKF para evitar la corrupción de actitud.
