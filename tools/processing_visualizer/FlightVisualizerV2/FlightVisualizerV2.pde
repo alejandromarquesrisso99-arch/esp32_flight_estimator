@@ -396,8 +396,7 @@ void drawVehicleModel() {
       drawFpvRacingDroneModel();
       break;
     case 3:
-      // Perfil 3: Cohete de lanzamiento
-      drawFlatBoardModel();
+      drawSpaceRocketModel();
       break;
     case 4:
       // Perfil 4: Misil de alta maniobra
@@ -663,6 +662,243 @@ void drawFpvRacingDroneModel() {
   drawTriBladePropeller(-62, -2, 45, propAngle, false);
   // Trasero Derecho (RR) - CW
   drawTriBladePropeller(62, -2, 45, propAngle, true);
+}
+
+/**
+ * Modelo 3D: Cohete Espacial Multietapa (Perfil 3: ROCKET_LAUNCH)
+ * Inspirado en vehiculos de lanzamiento orbital aeroespacial modernos (estilo NASA / SpaceX)
+ * Geometria pura y estilizada: cofia ojival de proa, anillo interetapa de carbono, 4 aletas de rejilla (Grid Fins) de titanio,
+ * conductos longitudinales de avionica (raceways), toberas de alta temperatura y penacho de propulsion con diamantes de choque supersonicos.
+ */
+void drawSpaceRocketModel() {
+  // 1. Ejes de referencia discretos de proa / estribor / vientre
+  strokeWeight(2);
+  stroke(255, 45, 55, 180); line(0, 0, 0, 0, 0, -145); // Eje longitudinal / Proa (-Z Processing)
+  stroke(45, 255, 90, 180); line(0, 0, 0, 60, 0, 0);    // Eje transversal / Estribor (+X Processing)
+  stroke(45, 120, 255, 180); line(0, 0, 0, 0, 60, 0);   // Eje normal / Vientre (+Y Processing)
+
+  // 2. Cofia Ojival de Carga Util (Payload Fairing en proa: Z = -135 a Z = -75)
+  // Punta conica ojival de proa
+  fill(242, 245, 250);
+  stroke(175, 185, 200);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 0, -115);
+  rotateX(HALF_PI);
+  drawCylinder(0.8f, 13.5f, 40, 24);
+  popMatrix();
+
+  // Cuerpo cilindrico de la cofia
+  fill(245, 248, 252);
+  pushMatrix();
+  translate(0, 0, -85);
+  rotateX(HALF_PI);
+  drawCylinder(13.5f, 13.5f, 20, 24);
+  popMatrix();
+
+  // Franja de separacion de cofia (Linea pirotecnica de desacople)
+  fill(40, 45, 52);
+  noStroke();
+  pushMatrix();
+  translate(0, 0, -75);
+  rotateX(HALF_PI);
+  drawCylinder(13.7f, 13.7f, 1.5f, 24);
+  popMatrix();
+
+  // 3. Segunda Etapa (Upper Stage: Z = -75 a Z = -40)
+  fill(238, 242, 248);
+  stroke(175, 185, 200);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 0, -57.5f);
+  rotateX(HALF_PI);
+  drawCylinder(13.0f, 13.0f, 35, 24);
+  popMatrix();
+
+  // 4. Anillo Interetapa de Carbono (Interstage: Z = -40 a Z = -20)
+  fill(26, 29, 35);
+  stroke(50, 58, 68);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 0, -30);
+  rotateX(HALF_PI);
+  drawCylinder(13.2f, 13.2f, 20, 24);
+  popMatrix();
+
+  // 4 Aletas de Rejilla de Titanio (Grid Fins) para guiado aerodinamico
+  drawRocketGridFin(0, 13.2f, -32);            // Superior (+Y)
+  drawRocketGridFin(HALF_PI, 13.2f, -32);      // Estribor (+X)
+  drawRocketGridFin(PI, 13.2f, -32);           // Inferior (-Y)
+  drawRocketGridFin(PI + HALF_PI, 13.2f, -32); // Babor (-X)
+
+  // 5. Primera Etapa / Booster Principal (Z = -20 a Z = +70)
+  fill(240, 244, 250);
+  stroke(180, 190, 205);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 0, 25);
+  rotateX(HALF_PI);
+  drawCylinder(13.0f, 13.0f, 90, 24);
+  popMatrix();
+
+  // Conductos longitudinales de avionica y alimentacion (Raceways)
+  fill(36, 42, 50);
+  noStroke();
+  pushMatrix();
+  translate(0, -13.2f, 15);
+  box(2.2f, 1.2f, 110);
+  popMatrix();
+  pushMatrix();
+  translate(0, 13.2f, 15);
+  box(2.2f, 1.2f, 110);
+  popMatrix();
+
+  // Bandas estructurales de tanques criogenicos (LOX y Kerosene/CH4)
+  fill(160, 172, 185);
+  pushMatrix(); translate(0, 0, -5); rotateX(HALF_PI); drawCylinder(13.3f, 13.3f, 1.2f, 24); popMatrix();
+  pushMatrix(); translate(0, 0, 45); rotateX(HALF_PI); drawCylinder(13.3f, 13.3f, 1.2f, 24); popMatrix();
+
+  // 4 Carenados estabilizadores de base / Patas replegadas
+  drawRocketBaseAeroFin(0, 13.0f, 62);
+  drawRocketBaseAeroFin(HALF_PI, 13.0f, 62);
+  drawRocketBaseAeroFin(PI, 13.0f, 62);
+  drawRocketBaseAeroFin(PI + HALF_PI, 13.0f, 62);
+
+  // 6. Base de Empuje y Racimo de Toberas (Thrust Structure & Nozzles: Z = +70 a Z = +85)
+  // Escudo termico de popa
+  fill(28, 30, 34);
+  stroke(15, 18, 20);
+  pushMatrix();
+  translate(0, 0, 70);
+  rotateX(HALF_PI);
+  drawCylinder(13.0f, 11.5f, 4, 24);
+  popMatrix();
+
+  // Racimo de Toberas de Motor Cohete (Aleacion Inconel/Niobio)
+  // Tobera Central Principal
+  drawRocketNozzle(0, 0, 72, 3.0f, 5.5f, 14);
+
+  // 4 Toberas Perifericas
+  float nozOff = 5.6f;
+  drawRocketNozzle(-nozOff, 0, 72, 2.2f, 4.2f, 12);
+  drawRocketNozzle(nozOff, 0, 72, 2.2f, 4.2f, 12);
+  drawRocketNozzle(0, -nozOff, 72, 2.2f, 4.2f, 12);
+  drawRocketNozzle(0, nozOff, 72, 2.2f, 4.2f, 12);
+
+  // 7. Penacho de Propulsion Cohete Animado (Exhaust Plume con Diamantes de Choque)
+  drawRocketExhaustPlume(0, 0, 86);
+}
+
+// -------------------------------------------------------------
+// SUBCOMPONENTES DEL COHETE ESPACIAL
+// -------------------------------------------------------------
+
+void drawRocketGridFin(float angle, float radius, float z) {
+  pushMatrix();
+  translate(0, 0, z);
+  rotateZ(angle);
+  translate(0, -radius, 0);
+
+  // Bisagra y actuador de titanio
+  fill(70, 78, 88);
+  stroke(40, 46, 54);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, -2, 0);
+  box(4, 4, 5);
+  popMatrix();
+
+  // Estructura de aleta de rejilla desplegada
+  fill(110, 120, 132);
+  stroke(55, 62, 70);
+  pushMatrix();
+  translate(0, -9, 0);
+  box(1.5f, 12, 14); // Marco perimetral
+  
+  // Rejilla interna aerodinamica
+  fill(85, 95, 108);
+  noStroke();
+  box(0.6f, 10, 12);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawRocketBaseAeroFin(float angle, float radius, float z) {
+  pushMatrix();
+  translate(0, 0, z);
+  rotateZ(angle);
+  translate(0, -radius, 0);
+
+  // Carenado aerodinamico de base
+  fill(235, 240, 246);
+  stroke(165, 175, 190);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, -3, 0);
+  box(2.0f, 6, 22);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawRocketNozzle(float x, float y, float z, float rTop, float rBottom, float len) {
+  pushMatrix();
+  translate(x, y, z + len * 0.5f);
+  rotateX(HALF_PI);
+
+  // Exterior de la tobera de niobio/inconel
+  fill(65, 60, 56);
+  stroke(35, 30, 28);
+  strokeWeight(0.8f);
+  drawCylinder(rTop, rBottom, len, 16);
+
+  // Interior al rojo vivo de la camara de combustion
+  fill(255, 120, 30);
+  noStroke();
+  pushMatrix();
+  translate(0, -len * 0.2f, 0);
+  drawCylinder(rTop * 0.8f, rBottom * 0.6f, len * 0.5f, 16);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawRocketExhaustPlume(float x, float y, float z) {
+  float flicker = sin(frameCount * 0.5f) * 4.0f + random(-2.0f, 2.0f);
+  float plumeLen = 72.0f + flicker;
+
+  pushMatrix();
+  translate(x, y, z);
+
+  // Capa exterior de llama energetica naranja/ambar translucida
+  noStroke();
+  fill(255, 120, 20, 140);
+  pushMatrix();
+  translate(0, 0, plumeLen * 0.45f);
+  rotateX(HALF_PI);
+  drawCylinder(8.5f, 1.0f, plumeLen, 16);
+  popMatrix();
+
+  // Nucleo interior hipersonico blanco brillante / amarillo
+  fill(255, 245, 210, 220);
+  pushMatrix();
+  translate(0, 0, plumeLen * 0.25f);
+  rotateX(HALF_PI);
+  drawCylinder(5.0f, 0.5f, plumeLen * 0.55f, 14);
+  popMatrix();
+
+  // Diamantes de choque supersonicos (Shock Diamonds)
+  fill(0, 230, 255, 210);
+  for (int d = 1; d <= 3; d++) {
+    pushMatrix();
+    translate(0, 0, d * 14.0f + flicker * 0.2f);
+    rotateX(HALF_PI);
+    drawCylinder(3.2f - d * 0.6f, 0.4f, 7.0f, 10);
+    popMatrix();
+  }
+
+  popMatrix();
 }
 
 // -------------------------------------------------------------
