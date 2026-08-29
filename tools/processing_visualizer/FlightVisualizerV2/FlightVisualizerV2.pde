@@ -48,6 +48,15 @@ boolean isDemoMode = false;
 float demoSimTime = 0.0f;
 float propAngle = 0.0f;
 
+// Variables de control de camara interactiva 3D con raton
+final float DEFAULT_CAM_ROT_X = -atan(1.0f / sqrt(2.0f)); // Inclinacion orbital X (~ -35.264°)
+final float DEFAULT_CAM_ROT_Y = radians(135);              // Orientacion orbital Y (135°)
+float camRotX = DEFAULT_CAM_ROT_X;
+float camRotY = DEFAULT_CAM_ROT_Y;
+float camPanX = 0.0f;
+float camPanY = 0.0f;
+float camZoom = 1.0f;
+
 // Variables de estado de telemetria
 long lastPacketTimeMs = 0;
 int rxPacketCount = 0;
@@ -290,12 +299,15 @@ void draw3DVisualizer(float x, float y, float w, float h) {
   hint(ENABLE_DEPTH_TEST);
   pushMatrix();
 
-  // Centrar espacio de trabajo 3D
-  translate(x + w/2, y + h/2 + 25, 0);
+  // Centrar espacio de trabajo 3D y aplicar desplazamiento interactivo (Pan X, Pan Y)
+  translate(x + w/2 + camPanX, y + h/2 + 25 + camPanY, 0);
 
-  // Proyeccion isometrica espacial (vista diagonal superior-frontal)
-  rotateX(-atan(1.0f / sqrt(2.0f))); // -35.264°: inclinacion superior
-  rotateY(radians(135));              // 135°: orientacion hacia el frente derecho de la placa
+  // Escala interactiva / Zoom con rueda del raton
+  scale(camZoom);
+
+  // Proyeccion orbital interactiva de la camara (Rotacion orbital X e Y con raton)
+  rotateX(camRotX);
+  rotateY(camRotY);
 
   // Iluminacion 3D dinamica
   lights();
@@ -349,6 +361,12 @@ void draw3DVisualizer(float x, float y, float w, float h) {
     textAlign(RIGHT, TOP);
     text("[SIMULACION DEMO]", x + w - 20, y + 20);
   }
+
+  // Guia rapida HUD de controles de camara con raton
+  fill(120, 160, 200, 210);
+  textSize(11);
+  textAlign(LEFT, BOTTOM);
+  text("Arrastre Izq: Orbitar | Arrastre Der: Desplazar | Rueda: Zoom | 'C': Centrar", x + 18, y + h - 12);
 }
 
 void drawGroundReferenceGrid(float size, float step, float yOffset) {
@@ -1624,7 +1642,7 @@ void mousePressed() {
     if (mouseX >= 580 && mouseX <= 1020 && mouseY >= 110 && mouseY <= 350) selectProfile(2);
     if (mouseX >= 80 && mouseX <= 520 && mouseY >= 380 && mouseY <= 620) selectProfile(3);
     if (mouseX >= 580 && mouseX <= 1020 && mouseY >= 380 && mouseY <= 620) selectProfile(4);
-  } else if (currentUiState == UI_STATE_RUNNING_ESTIMATOR) {
+  } else if (currentUiState == UI_STATE_RUNNING_ESTIMATOR || currentUiState == UI_STATE_BIST_CALIBRATION) {
     // Comprobar clic en el boton de reinicio (X: 620-1070, Y: 655-690)
     if (mouseX >= 620 && mouseX <= 1070 && mouseY >= 655 && mouseY <= 690) {
       if (isDemoMode) {
@@ -1633,11 +1651,66 @@ void mousePressed() {
       } else {
         sendSystemResetCmd();
       }
+      return;
+    }
+
+    // Doble clic dentro de la ventana 3D para centrar y resetear la camara
+    if (mouseEvent != null && mouseEvent.getClickCount() == 2) {
+      if (mouseX >= 30 && mouseX <= 570 && mouseY >= 35 && mouseY <= 705) {
+        camRotX = DEFAULT_CAM_ROT_X;
+        camRotY = DEFAULT_CAM_ROT_Y;
+        camPanX = 0.0f;
+        camPanY = 0.0f;
+        camZoom = 1.0f;
+      }
+    }
+  }
+}
+
+void mouseDragged() {
+  if (currentUiState == UI_STATE_RUNNING_ESTIMATOR || currentUiState == UI_STATE_BIST_CALIBRATION) {
+    // Solo actuar si el cursor esta dentro del area de renderizado 3D (X: 30 a 570, Y: 35 a 705)
+    if (mouseX >= 30 && mouseX <= 570 && mouseY >= 35 && mouseY <= 705) {
+      if (mouseButton == LEFT) {
+        // Orbitar / Rotar la camara 3D
+        camRotY += (mouseX - pmouseX) * 0.012f;
+        camRotX -= (mouseY - pmouseY) * 0.012f;
+        // Limitar inclinacion orbital vertical para evitar invertir la visualizacion
+        camRotX = constrain(camRotX, -HALF_PI + 0.02f, HALF_PI - 0.02f);
+      } else if (mouseButton == RIGHT || mouseButton == CENTER) {
+        // Desplazar / Panear la camara 3D en el plano de la pantalla
+        camPanX += (mouseX - pmouseX);
+        camPanY += (mouseY - pmouseY);
+      }
+    }
+  }
+}
+
+void mouseWheel(MouseEvent event) {
+  if (currentUiState == UI_STATE_RUNNING_ESTIMATOR || currentUiState == UI_STATE_BIST_CALIBRATION) {
+    if (mouseX >= 30 && mouseX <= 570 && mouseY >= 35 && mouseY <= 705) {
+      float count = event.getCount();
+      if (count > 0) {
+        camZoom *= 0.92f;
+      } else if (count < 0) {
+        camZoom *= 1.08f;
+      }
+      camZoom = constrain(camZoom, 0.25f, 4.5f);
     }
   }
 }
 
 void keyPressed() {
+  // Tecla 'C' para centrar y resetear la camara 3D
+  if (key == 'c' || key == 'C') {
+    camRotX = DEFAULT_CAM_ROT_X;
+    camRotY = DEFAULT_CAM_ROT_Y;
+    camPanX = 0.0f;
+    camPanY = 0.0f;
+    camZoom = 1.0f;
+    return;
+  }
+
   // Tecla 'R' para reinicio rapido y retorno al menu de perfiles
   if (key == 'r' || key == 'R') {
     if (isDemoMode) {
