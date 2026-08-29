@@ -4,7 +4,7 @@
 #include "matrix.hpp"
 
 void test_matrix_basics() {
-    std::cout << "[TEST MATRIX] Basic construction and indexing..." << std::endl;
+    std::cout << "[PRUEBA MATRIZ] Construccion basica e indexacion..." << std::endl;
 
     Matrix<3, 3> m{};
     for (size_t r = 0; r < 3; ++r) {
@@ -22,18 +22,18 @@ void test_matrix_basics() {
     assert(m(2, 1) == -3.2f);
     assert(m.data[1 * 3 + 2] == 5.5f);
 
-    // Vector 1D indexing
+    // Indexacion unidimensional para vectores columna
     Vector3f v{};
     v(0) = 10.0f;
     v(1) = 20.0f;
     v(2) = 30.0f;
     assert(v(0) == 10.0f && v(1) == 20.0f && v(2) == 30.0f);
 
-    std::cout << "  -> Basics passed." << std::endl;
+    std::cout << "  -> Construccion basica superada con exito." << std::endl;
 }
 
 void test_matrix_identity() {
-    std::cout << "[TEST MATRIX] Identity generation..." << std::endl;
+    std::cout << "[PRUEBA MATRIZ] Generacion de matriz identidad..." << std::endl;
 
     auto I3 = Matrix3f::identity();
     for (size_t i = 0; i < 3; ++i) {
@@ -51,11 +51,11 @@ void test_matrix_identity() {
         assert(std::fabs(I7(i, i) - 1.0f) < 1e-6f);
     }
 
-    std::cout << "  -> Identity passed." << std::endl;
+    std::cout << "  -> Generacion de matriz identidad superada con exito." << std::endl;
 }
 
 void test_matrix_arithmetic() {
-    std::cout << "[TEST MATRIX] Addition, subtraction and scalar scaling..." << std::endl;
+    std::cout << "[PRUEBA MATRIZ] Suma, resta y escalado escalar..." << std::endl;
 
     Matrix<2, 2> a{};
     a(0, 0) = 1.0f; a(0, 1) = 2.0f;
@@ -86,11 +86,11 @@ void test_matrix_arithmetic() {
     a -= b;
     assert(a(0, 0) == 1.0f && a(1, 1) == 4.0f);
 
-    std::cout << "  -> Arithmetic passed." << std::endl;
+    std::cout << "  -> Aritmetica matricial superada con exito." << std::endl;
 }
 
 void test_matrix_multiplication_and_transpose() {
-    std::cout << "[TEST MATRIX] Matrix multiplication and transpose..." << std::endl;
+    std::cout << "[PRUEBA MATRIZ] Multiplicacion matricial y transposicion..." << std::endl;
 
     Matrix<2, 3> A{};
     A(0, 0) = 1.0f; A(0, 1) = 2.0f; A(0, 2) = 3.0f;
@@ -112,13 +112,13 @@ void test_matrix_multiplication_and_transpose() {
     assert(C(1, 0) == 85.0f);
     assert(C(1, 1) == 55.0f);
 
-    // Transpose of A (3x2)
+    // Transpuesta de A (3x2)
     Matrix<3, 2> At = A.transpose();
     assert(At(0, 0) == 1.0f && At(0, 1) == 4.0f);
     assert(At(1, 0) == 2.0f && At(1, 1) == 5.0f);
     assert(At(2, 0) == 3.0f && At(2, 1) == 6.0f);
 
-    // Property: (A*B)^T == B^T * A^T
+    // Propiedad algebraica: (A*B)^T == B^T * A^T
     Matrix<2, 2> Ct = C.transpose();
     Matrix<2, 2> BtAt = B.transpose() * A.transpose();
     for (size_t i = 0; i < 2; ++i) {
@@ -127,11 +127,11 @@ void test_matrix_multiplication_and_transpose() {
         }
     }
 
-    std::cout << "  -> Multiplication and Transpose passed." << std::endl;
+    std::cout << "  -> Multiplicacion y transposicion superadas con exito." << std::endl;
 }
 
 void test_matrix_norm_and_blocks() {
-    std::cout << "[TEST MATRIX] Euclidean norm and block extraction/assignment..." << std::endl;
+    std::cout << "[PRUEBA MATRIZ] Norma euclidea y manipulacion de sub-bloques..." << std::endl;
 
     Vector3f v{};
     v(0) = 3.0f; v(1) = 4.0f; v(2) = 0.0f;
@@ -141,7 +141,7 @@ void test_matrix_norm_and_blocks() {
     q(0) = 0.5f; q(1) = 0.5f; q(2) = 0.5f; q(3) = 0.5f;
     assert(std::fabs(q.norm() - 1.0f) < 1e-6f);
 
-    // Block operations
+    // Operaciones con sub-bloques
     Matrix7f large = Matrix7f::identity();
     Matrix3f sub3{};
     sub3(0, 0) = 10.0f; sub3(0, 1) = 11.0f; sub3(0, 2) = 12.0f;
@@ -159,13 +159,13 @@ void test_matrix_norm_and_blocks() {
         }
     }
 
-    std::cout << "  -> Norm and Blocks passed." << std::endl;
+    std::cout << "  -> Norma y sub-bloques superados con exito." << std::endl;
 }
 
 void test_matrix_inverse3x3() {
-    std::cout << "[TEST MATRIX] 3x3 Analytical Matrix Inversion..." << std::endl;
+    std::cout << "[PRUEBA MATRIZ] Inversion analitica de matrices 3x3..." << std::endl;
 
-    // 1. Identity inverse
+    // 1. Inversa de matriz identidad
     Matrix3f I = Matrix3f::identity();
     Matrix3f I_inv = I.inverse3x3();
     for (size_t i = 0; i < 3; ++i) {
@@ -175,7 +175,7 @@ void test_matrix_inverse3x3() {
         }
     }
 
-    // 2. Diagonal matrix inverse
+    // 2. Inversa de matriz diagonal
     Matrix3f D{};
     D(0, 0) = 2.0f; D(1, 1) = 4.0f; D(2, 2) = 5.0f;
     Matrix3f D_inv = D.inverse3x3();
@@ -183,7 +183,7 @@ void test_matrix_inverse3x3() {
     assert(std::fabs(D_inv(1, 1) - 0.25f) < 1e-6f);
     assert(std::fabs(D_inv(2, 2) - 0.2f) < 1e-6f);
 
-    // 3. General non-singular matrix
+    // 3. Matriz general no singular
     Matrix3f M{};
     M(0, 0) = 1.0f; M(0, 1) = 2.0f; M(0, 2) = 3.0f;
     M(1, 0) = 0.0f; M(1, 1) = 1.0f; M(1, 2) = 4.0f;
@@ -198,23 +198,23 @@ void test_matrix_inverse3x3() {
         }
     }
 
-    // 4. Singular matrix (det == 0)
+    // 4. Matriz singular (determinante nulo det == 0)
     Matrix3f Sing{};
     Sing(0, 0) = 1.0f; Sing(0, 1) = 2.0f; Sing(0, 2) = 3.0f;
-    Sing(1, 0) = 2.0f; Sing(1, 1) = 4.0f; Sing(1, 2) = 6.0f; // Row 2 = 2 * Row 1
+    Sing(1, 0) = 2.0f; Sing(1, 1) = 4.0f; Sing(1, 2) = 6.0f; // Fila 2 = 2 * Fila 1
     Sing(2, 0) = 7.0f; Sing(2, 1) = 8.0f; Sing(2, 2) = 9.0f;
 
     Matrix3f Sing_inv = Sing.inverse3x3();
     for (size_t i = 0; i < 9; ++i) {
-        assert(Sing_inv.data[i] == 0.0f); // Null matrix returned safely
+        assert(Sing_inv.data[i] == 0.0f); // Se devuelve matriz nula de forma segura
     }
 
-    std::cout << "  -> 3x3 Inverse passed." << std::endl;
+    std::cout << "  -> Inversion 3x3 superada con exito." << std::endl;
 }
 
 int main() {
     std::cout << "============================================" << std::endl;
-    std::cout << "   Running Matrix Algebraic Engine Tests    " << std::endl;
+    std::cout << "   Pruebas Unitarias del Motor Matricial    " << std::endl;
     std::cout << "============================================" << std::endl;
 
     test_matrix_basics();
@@ -224,6 +224,6 @@ int main() {
     test_matrix_norm_and_blocks();
     test_matrix_inverse3x3();
 
-    std::cout << "\n>>> ALL MATRIX ENGINE TESTS PASSED SUCCESSFULLY! <<<\n" << std::endl;
+    std::cout << "\n>>> TODAS LAS PRUEBAS MATRICIALES PASARON CON EXITO! <<<\n" << std::endl;
     return 0;
 }

@@ -6,7 +6,7 @@
 namespace flight {
 
 /**
- * @brief High-Integrity System Execution States
+ * @brief Estados de ejecución del sistema de alta integridad
  */
 enum class SystemState : uint8_t {
     UNINITIALIZED        = 0x00,
@@ -17,7 +17,7 @@ enum class SystemState : uint8_t {
 };
 
 /**
- * @brief Convert SystemState to string for logging / debugging
+ * @brief Convierte SystemState a cadena de texto para registro y depuración
  */
 constexpr const char* state_to_string(SystemState state) {
     switch (state) {
@@ -31,7 +31,7 @@ constexpr const char* state_to_string(SystemState state) {
 }
 
 /**
- * @brief State Machine Controller (Deterministic & Static)
+ * @brief Controlador de máquina de estados finito (determinista y estático)
  */
 class FlightFSM {
 public:
@@ -47,12 +47,12 @@ public:
                 return (next == SystemState::RUNNING_ESTIMATOR || next == SystemState::HARD_FAULT_LOCK);
 
             case SystemState::RUNNING_ESTIMATOR:
-                // Rule of Immutability: In-flight profile transitions are forbidden!
-                // Only a transition to HARD_FAULT_LOCK or power cycle/reboot is allowed.
+                // Regla de Inmutabilidad: ¡Las transiciones de perfil en vuelo están prohibidas!
+                // Solo se permite la transición a HARD_FAULT_LOCK o el reinicio global del sistema.
                 return (next == SystemState::HARD_FAULT_LOCK);
 
             case SystemState::HARD_FAULT_LOCK:
-                // Sinks into hard fault lock permanently until physical/software reboot
+                // Estado pozo de bloqueo permanente hasta reinicio físico o por software
                 return false;
 
             default:
@@ -62,3 +62,4 @@ public:
 };
 
 } // namespace flight
+

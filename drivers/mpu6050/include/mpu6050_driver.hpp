@@ -23,11 +23,11 @@ constexpr gpio_num_t GPIO_NUM_22 = 22;
 namespace flight {
 namespace drivers {
 
-// MPU6050 Standard I2C Addresses
-constexpr uint8_t MPU6050_I2C_ADDR_DEFAULT = 0x68; ///< AD0 connected to GND
-constexpr uint8_t MPU6050_I2C_ADDR_ALT     = 0x69; ///< AD0 connected to VCC
+// Direcciones estándar I2C del sensor MPU6050
+constexpr uint8_t MPU6050_I2C_ADDR_DEFAULT = 0x68; ///< Pin AD0 conectado a GND
+constexpr uint8_t MPU6050_I2C_ADDR_ALT     = 0x69; ///< Pin AD0 conectado a VCC
 
-// MPU6050 Register Map
+// Mapa de registros del MPU6050
 constexpr uint8_t REG_AUX_VDDIO     = 0x01;
 constexpr uint8_t REG_SMPLRT_DIV    = 0x19;
 constexpr uint8_t REG_CONFIG        = 0x1A;
@@ -46,85 +46,85 @@ constexpr uint8_t REG_PWR_MGMT_1    = 0x6B;
 constexpr uint8_t REG_PWR_MGMT_2    = 0x6C;
 constexpr uint8_t REG_WHO_AM_I      = 0x75;
 
-// Expected WHO_AM_I value
+// Valor esperado del registro WHO_AM_I
 constexpr uint8_t WHO_AM_I_VAL_6050 = 0x68;
 
 /**
- * @brief Raw 16-bit sensor readings from atomic 14-byte burst read
+ * @brief Lecturas crudas de 16 bits obtenidas en la lectura atómica en ráfaga de 14 bytes
  */
 struct InertialRawData {
-    int16_t accel[3];   ///< Raw accelerometer [X, Y, Z]
-    int16_t temp;       ///< Raw internal die temperature
-    int16_t gyro[3];    ///< Raw gyroscope [X, Y, Z]
+    int16_t accel[3];   ///< Aceleración cruda [X, Y, Z]
+    int16_t temp;       ///< Temperatura cruda del chip
+    int16_t gyro[3];    ///< Velocidad angular cruda [X, Y, Z]
 };
 
 /**
- * @brief Physical engineering unit representations
+ * @brief Datos inerciales escalados en unidades físicas del Sistema Internacional
  */
 struct InertialScaledData {
-    float accel_g[3];       ///< Acceleration in g [X, Y, Z]
-    float accel_mss[3];     ///< Acceleration in m/s^2 [X, Y, Z]
-    float temp_c;           ///< Temperature in degrees Celsius
-    float gyro_dps[3];      ///< Angular velocity in deg/s [X, Y, Z]
-    float gyro_rads[3];     ///< Angular velocity in rad/s [X, Y, Z]
+    float accel_g[3];       ///< Aceleración en unidades g [X, Y, Z]
+    float accel_mss[3];     ///< Aceleración en m/s^2 [X, Y, Z]
+    float temp_c;           ///< Temperatura en grados Celsius
+    float gyro_dps[3];      ///< Velocidad angular en deg/s [X, Y, Z]
+    float gyro_rads[3];     ///< Velocidad angular en rad/s [X, Y, Z]
 };
 
 /**
- * @brief Sensor calibration bias offsets
+ * @brief Estructura de almacenamiento de sesgos de calibración
  */
 struct CalibrationData {
-    float gyro_bias_dps[3];     ///< Gyro bias in deg/s
-    float gyro_bias_rads[3];    ///< Gyro bias in rad/s
-    float accel_bias_g[3];      ///< Accel bias in g
-    float accel_bias_mss[3];    ///< Accel bias in m/s^2
-    bool  is_calibrated;        ///< Calibration validity flag
+    float gyro_bias_dps[3];     ///< Sesgo del giróscopo en deg/s
+    float gyro_bias_rads[3];    ///< Sesgo del giróscopo en rad/s
+    float accel_bias_g[3];      ///< Sesgo del acelerómetro en g
+    float accel_bias_mss[3];    ///< Sesgo del acelerómetro en m/s^2
+    bool  is_calibrated;        ///< Bandera de validez de la calibración
 };
 
 /**
- * @brief Progress callback signature for calibration updates
+ * @brief Firma de la función de devolución de llamada (callback) para el progreso de calibración
  */
 using CalibrationProgressCallback = void (*)(uint8_t progress_pct, const float gyro_bias_rads[3]);
 
 /**
- * @brief Bare-Metal High-Integrity MPU6050 Driver
+ * @brief Controlador bare-metal de alta integridad para el sensor MPU6050
  */
 class MPU6050Driver {
 public:
     /**
-     * @brief Initialize I2C bus at 400kHz and configure MPU6050 for selected flight profile
+     * @brief Inicializa el bus I2C a 400 kHz y configura el MPU6050 para el perfil de vuelo seleccionado
      */
     static esp_err_t init(FlightProfileId profile, 
                           gpio_num_t sda_pin = GPIO_NUM_21, 
                           gpio_num_t scl_pin = GPIO_NUM_22);
 
     /**
-     * @brief Verify device identity via WHO_AM_I register
+     * @brief Verifica la identidad del dispositivo mediante el registro WHO_AM_I
      */
     static esp_err_t verify_who_am_i();
 
     /**
-     * @brief Execute atomic 14-byte burst read from hardware registers
+     * @brief Ejecuta la lectura atómica en ráfaga de 14 bytes de los registros del sensor
      */
     static esp_err_t read_burst_raw(InertialRawData& raw);
 
     /**
-     * @brief Convert raw integers to scaled SI and engineering units applying calibration
+     * @brief Convierte valores enteros crudos a unidades físicas aplicando la calibración
      */
     static void scale_data(const InertialRawData& raw, InertialScaledData& scaled);
 
     /**
-     * @brief Perform static rest calibration acquiring sample_count samples
+     * @brief Realiza la calibración estática en reposo promediando sample_count muestras
      */
     static esp_err_t calibrate_biases(size_t sample_count = 500, 
                                      CalibrationProgressCallback cb = nullptr);
 
     /**
-     * @brief Get active calibration parameters
+     * @brief Obtiene los parámetros activos de calibración
      */
     static const CalibrationData& get_calibration();
 
     /**
-     * @brief Check if I2C driver is initialized
+     * @brief Comprueba si el driver I2C se encuentra inicializado
      */
     static bool is_initialized();
 
@@ -135,3 +135,4 @@ private:
 
 } // namespace drivers
 } // namespace flight
+

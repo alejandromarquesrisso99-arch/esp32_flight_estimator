@@ -12,31 +12,31 @@ static const char* TAG = "TELEMETRY";
 
 namespace flight {
 
-// UART configuration constants
+// Constantes de configuración de UART
 static constexpr uart_port_t UART_PORT_NUM = UART_NUM_0;
 static constexpr int UART_BAUD_RATE        = 115200;
 static constexpr size_t UART_RX_BUF_SIZE   = 256;
 static constexpr size_t TELEMETRY_STACK_SZ = 6144;
 
-// FreeRTOS Static Allocation Buffers (Zero-Heap Policy)
+// Búferes de asignación estática de FreeRTOS (Política Zero-Heap)
 static StackType_t   s_telemetry_stack[TELEMETRY_STACK_SZ];
 static StaticTask_t  s_telemetry_tcb;
 static uint8_t       s_queue_storage[sizeof(protocol::PayloadTelemetry)];
 static StaticQueue_t s_queue_struct;
 
-// Global exported handles and state variables
+// Descriptores globales y variables de estado
 QueueHandle_t           g_telemetry_queue = nullptr;
 volatile SystemState     g_system_state    = SystemState::UNINITIALIZED;
 volatile FlightProfileId g_active_profile  = FlightProfileId::UNKNOWN;
 std::atomic<uint32_t>    g_health_flags{HEALTH_FLAG_NONE};
 
-// Internal packet buffers
+// Búferes estáticos internos para tramas
 static protocol::Packet<protocol::PayloadHeartbeat>  s_hb_packet;
 static protocol::Packet<protocol::PayloadAckNack>    s_ack_packet;
 static protocol::Packet<protocol::PayloadBistReport> s_bist_packet;
 static protocol::Packet<protocol::PayloadTelemetry>  s_telem_packet;
 
-// UART RX Parser State Machine
+// Máquina de estados del analizador de tramas UART RX
 enum class RxState {
     WAIT_PREAMBLE_0,
     WAIT_PREAMBLE_1,
@@ -104,24 +104,24 @@ static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* 
             const auto* cmd = reinterpret_cast<const protocol::PayloadCmdSetProfile*>(payload);
             const auto requested_profile = static_cast<FlightProfileId>(cmd->profile_id);
 
-            // Rule of In-flight Immutability
+            // Regla de Inmutabilidad en vuelo
             if (g_system_state != SystemState::AWAITING_PROFILE) {
-                ESP_LOGW(TAG, "Profile change rejected: In-flight immutability active (Current state: %s)",
+                ESP_LOGW(TAG, "Cambio de perfil rechazado: Inmutabilidad en vuelo activa (Estado actual: %s)",
                          state_to_string(g_system_state));
                 send_ack_nack(id, protocol::AckStatus::NACK_INVALID_STATE);
                 return;
             }
 
-            // Validate requested profile ID
+            // Validar ID del perfil solicitado
             if (requested_profile < FlightProfileId::DRONE_HOVER || requested_profile > FlightProfileId::MISSILE_HIGH_G) {
-                ESP_LOGE(TAG, "Invalid profile ID: %u", static_cast<unsigned>(cmd->profile_id));
+                ESP_LOGE(TAG, "ID de perfil invalido: %u", static_cast<unsigned>(cmd->profile_id));
                 send_ack_nack(id, protocol::AckStatus::NACK_INVALID_PARAM);
                 return;
             }
 
-            // Lock profile and advance state machine
+            // Fijar perfil y avanzar la maquina de estados
             g_active_profile = requested_profile;
-            ESP_LOGI(TAG, "Profile locked: %u (%s)", 
+            ESP_LOGI(TAG, "Perfil fijado: %u (%s)", 
                      static_cast<unsigned>(g_active_profile),
                      get_profile_config(g_active_profile)->name);
 
@@ -134,7 +134,7 @@ static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* 
         }
 
         case protocol::MsgId::CMD_SYSTEM_RESET: {
-            ESP_LOGW(TAG, "Operator requested system reset. Rebooting in 50ms...");
+            ESP_LOGW(TAG, "Reinicio solicitado por el operador. Reiniciando en 50ms...");
             send_ack_nack(id, protocol::AckStatus::ACK);
             vTaskDelay(pdMS_TO_TICKS(50));
             esp_restart();
@@ -142,7 +142,7 @@ static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* 
         }
 
         default:
-            ESP_LOGW(TAG, "Unknown MsgId received: 0x%02X", msg_id);
+            ESP_LOGW(TAG, "MsgId desconocido recibido: 0x%02X", msg_id);
             send_ack_nack(id, protocol::AckStatus::NACK_UNKNOWN_CMD);
             break;
     }
@@ -207,7 +207,7 @@ static void process_uart_rx() {
                 if (protocol::verify_checksum(rx_msg_id, rx_len, rx_payload, received_chk)) {
                     handle_incoming_command(rx_msg_id, rx_len, rx_payload);
                 } else {
-                    ESP_LOGE(TAG, "Checksum error on MsgId: 0x%02X", rx_msg_id);
+                    ESP_LOGE(TAG, "Error de suma de control en MsgId: 0x%02X", rx_msg_id);
                     send_ack_nack(static_cast<protocol::MsgId>(rx_msg_id), protocol::AckStatus::NACK_CHECKSUM_ERROR);
                 }
                 rx_state = RxState::WAIT_PREAMBLE_0;
@@ -218,7 +218,7 @@ static void process_uart_rx() {
 }
 
 void telemetry_task_init() {
-    // 1. Configure and install UART driver
+    // 1. Configurar e instalar driver UART
     uart_config_t uart_config = {};
     uart_config.baud_rate           = UART_BAUD_RATE;
     uart_config.data_bits           = UART_DATA_8_BITS;
@@ -230,7 +230,7 @@ void telemetry_task_init() {
     ESP_ERROR_CHECK(uart_param_config(UART_PORT_NUM, &uart_config));
     ESP_ERROR_CHECK(uart_driver_install(UART_PORT_NUM, UART_RX_BUF_SIZE, 0, 0, nullptr, 0));
 
-    // 2. Create static telemetry queue (1 element, overwrite policy)
+    // 2. Crear cola estatica de telemetria (1 elemento, politica de sobrescritura)
     g_telemetry_queue = xQueueCreateStatic(
         1,
         sizeof(protocol::PayloadTelemetry),
@@ -239,20 +239,20 @@ void telemetry_task_init() {
     );
     assert(g_telemetry_queue != nullptr);
 
-    // 3. Create static FreeRTOS task pinned to Core 0 (Priority 3)
+    // 3. Crear tarea estatica FreeRTOS anclada al Nucleo 0 (Prioridad 3)
     TaskHandle_t task_handle = xTaskCreateStaticPinnedToCore(
         telemetry_task_run,
         "TelemetryTask",
         TELEMETRY_STACK_SZ,
         nullptr,
-        3,                    // Priority 3 (Service Domain)
+        3,                    // Prioridad 3 (Dominio de Servicio)
         s_telemetry_stack,
         &s_telemetry_tcb,
-        0                     // Pinned strictly to Core 0
+        0                     // Anclada estrictamente al Nucleo 0
     );
     assert(task_handle != nullptr);
 
-    ESP_LOGI(TAG, "Telemetry task initialized on Core 0 (Zero-Heap Static Allocation)");
+    ESP_LOGI(TAG, "Tarea de telemetria inicializada en Nucleo 0 (Asignacion Estatica Zero-Heap)");
 }
 
 void telemetry_task_run(void* pvParameters) {
@@ -260,13 +260,13 @@ void telemetry_task_run(void* pvParameters) {
     const TickType_t heartbeat_period_ticks = pdMS_TO_TICKS(100); // 10 Hz
 
     while (true) {
-        // 1. Process all pending incoming UART bytes
+        // 1. Procesar todos los bytes UART entrantes
         process_uart_rx();
 
-        // 2. Handle state-specific telemetry output
+        // 2. Manejar emision de telemetria segun estado del sistema
         switch (g_system_state) {
             case SystemState::AWAITING_PROFILE: {
-                // Emit heartbeat at 10 Hz
+                // Emitir latido de corazon (Heartbeat) a 10 Hz
                 TickType_t now = xTaskGetTickCount();
                 if ((now - last_heartbeat_tick) >= heartbeat_period_ticks) {
                     last_heartbeat_tick = now;
@@ -284,41 +284,41 @@ void telemetry_task_run(void* pvParameters) {
             }
 
             case SystemState::BIST_AND_CALIBRATION: {
-                ESP_LOGI(TAG, "Executing MPU6050 BIST & Calibration for profile %u...",
+                ESP_LOGI(TAG, "Ejecutando BIST y Calibracion del MPU6050 para perfil %u...",
                          static_cast<unsigned>(g_active_profile));
 
-                // Step 1: Initialize MPU6050 hardware driver
+                // Paso 1: Inicializar driver hardware MPU6050
                 esp_err_t err = drivers::MPU6050Driver::init(g_active_profile);
                 if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "MPU6050 hardware init failed (%s)! Entering HARD_FAULT_LOCK", esp_err_to_name(err));
+                    ESP_LOGE(TAG, "Fallo al inicializar hardware MPU6050 (%s)! Entrando en HARD_FAULT_LOCK", esp_err_to_name(err));
                     telemetry_send_bist_report(static_cast<uint8_t>(BistCode::IMU_COMM_FAIL), 0, nullptr, nullptr);
                     g_health_flags.fetch_or(HEALTH_FLAG_HARD_FAULT, std::memory_order_relaxed);
                     g_system_state = SystemState::HARD_FAULT_LOCK;
                     break;
                 }
 
-                // Step 2: Calibrate biases in static rest
+                // Paso 2: Calibrar sesgos en reposo estatico
                 err = drivers::MPU6050Driver::calibrate_biases(300, [](uint8_t progress_pct, const float gyro_bias_rads[3]) {
                     telemetry_send_bist_report(static_cast<uint8_t>(BistCode::OK), progress_pct, gyro_bias_rads, nullptr);
                 });
 
                 if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "MPU6050 bias calibration failed! Entering HARD_FAULT_LOCK");
+                    ESP_LOGE(TAG, "Fallo en calibracion de sesgos del MPU6050! Entrando en HARD_FAULT_LOCK");
                     telemetry_send_bist_report(static_cast<uint8_t>(BistCode::IMU_NOISE_EXCESSIVE), 0, nullptr, nullptr);
                     g_health_flags.fetch_or(HEALTH_FLAG_HARD_FAULT, std::memory_order_relaxed);
                     g_system_state = SystemState::HARD_FAULT_LOCK;
                     break;
                 }
 
-                // Step 3: Emit final report & transition to RUNNING_ESTIMATOR
+                // Paso 3: Emitir informe final y transicionar a RUNNING_ESTIMATOR
                 const auto& calib = drivers::MPU6050Driver::get_calibration();
                 telemetry_send_bist_report(static_cast<uint8_t>(BistCode::OK), 100, calib.gyro_bias_rads, calib.accel_bias_mss);
 
                 g_health_flags.fetch_or(HEALTH_FLAG_IMU_OK | HEALTH_FLAG_BIST_PASSED | HEALTH_FLAG_EKF_CONVERGED, std::memory_order_relaxed);
                 g_system_state = SystemState::RUNNING_ESTIMATOR;
-                ESP_LOGI(TAG, "Sensor calibration complete! Transitioned to RUNNING_ESTIMATOR");
+                ESP_LOGI(TAG, "Calibracion del sensor completada! Transicion a RUNNING_ESTIMATOR");
 
-                // Wake up Core 1 GNC Task immediately
+                // Despertar la tarea GNC en Nucleo 1 inmediatamente
                 TaskHandle_t gnc_h = gnc_task_get_handle();
                 if (gnc_h != nullptr) {
                     xTaskNotifyGive(gnc_h);
@@ -327,7 +327,7 @@ void telemetry_task_run(void* pvParameters) {
             }
 
             case SystemState::RUNNING_ESTIMATOR: {
-                // Receive high-integrity EKF telemetry packet produced by Core 1 GNC Task
+                // Recibir paquete de telemetria EKF producido por la tarea GNC en Nucleo 1
                 protocol::PayloadTelemetry incoming_payload;
                 if (xQueueReceive(g_telemetry_queue, &incoming_payload, pdMS_TO_TICKS(20)) == pdTRUE) {
                     protocol::init_packet(s_telem_packet, protocol::MsgId::ESTIMATOR_TELEMETRY);

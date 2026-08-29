@@ -10,17 +10,17 @@ static const char* TAG = "MPU6050";
 namespace flight {
 namespace drivers {
 
-// Static hardware handles
+// Descriptores estáticos de hardware
 static i2c_master_bus_handle_t s_bus_handle = nullptr;
 static i2c_master_dev_handle_t s_dev_handle = nullptr;
 static uint8_t                 s_device_addr = MPU6050_I2C_ADDR_DEFAULT;
 static bool                    s_is_initialized = false;
 
-// Dynamic sensitivity conversion factors based on active flight profile
-static float s_gyro_scale_to_dps = 1.0f / 131.0f;     // Default +/- 250 dps
-static float s_accel_scale_to_g  = 1.0f / 16384.0f;   // Default +/- 2 g
+// Factores de conversión de sensibilidad dinámicos según el perfil de vuelo
+static float s_gyro_scale_to_dps = 1.0f / 131.0f;     // Por defecto +/- 250 dps
+static float s_accel_scale_to_g  = 1.0f / 16384.0f;   // Por defecto +/- 2 g
 
-// Static calibration storage
+// Estructura estática de calibración
 static CalibrationData s_calibration = {
     .gyro_bias_dps  = {0.0f, 0.0f, 0.0f},
     .gyro_bias_rads = {0.0f, 0.0f, 0.0f},
@@ -48,24 +48,24 @@ esp_err_t MPU6050Driver::verify_who_am_i() {
     uint8_t who_am_i = 0;
     esp_err_t err = read_regs(REG_WHO_AM_I, &who_am_i, 1);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to read WHO_AM_I register (I2C error: %s)", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Fallo al leer registro WHO_AM_I (Error I2C: %s)", esp_err_to_name(err));
         return err;
     }
 
     if (who_am_i != WHO_AM_I_VAL_6050 && who_am_i != 0x69) {
-        ESP_LOGE(TAG, "WHO_AM_I mismatch! Expected 0x68/0x69, got: 0x%02X", who_am_i);
+        ESP_LOGE(TAG, "Discrepancia en WHO_AM_I! Esperado 0x68/0x69, recibido: 0x%02X", who_am_i);
         return ESP_ERR_NOT_FOUND;
     }
 
-    ESP_LOGI(TAG, "MPU6050 detected successfully (WHO_AM_I: 0x%02X)", who_am_i);
+    ESP_LOGI(TAG, "MPU6050 detectado con exito (WHO_AM_I: 0x%02X)", who_am_i);
     return ESP_OK;
 }
 
 esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gpio_num_t scl_pin) {
-    ESP_LOGI(TAG, "Initializing MPU6050 on I2C Fast-Mode (400 kHz) [SDA: GPIO%d, SCL: GPIO%d]...",
+    ESP_LOGI(TAG, "Inicializando MPU6050 en I2C Fast-Mode (400 kHz) [SDA: GPIO%d, SCL: GPIO%d]...",
              sda_pin, scl_pin);
 
-    // 1. Initialize I2C Master Bus if not already initialized
+    // 1. Inicializar bus maestro I2C si no ha sido creado previamente
     if (s_bus_handle == nullptr) {
         i2c_master_bus_config_t bus_config = {};
         bus_config.i2c_port = I2C_NUM_0;
@@ -77,12 +77,12 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
 
         esp_err_t err = i2c_new_master_bus(&bus_config, &s_bus_handle);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to initialize I2C master bus: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "Fallo al inicializar bus maestro I2C: %s", esp_err_to_name(err));
             return err;
         }
     }
 
-    // 2. Add MPU6050 device descriptor
+    // 2. Anadir descriptor del dispositivo MPU6050
     if (s_dev_handle == nullptr) {
         i2c_device_config_t dev_cfg = {};
         dev_cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
@@ -91,38 +91,38 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
 
         esp_err_t err = i2c_master_bus_add_device(s_bus_handle, &dev_cfg, &s_dev_handle);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to add I2C device: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "Fallo al anadir dispositivo I2C: %s", esp_err_to_name(err));
             return err;
         }
     }
 
-    // 3. Reset MPU6050 device
-    ESP_LOGI(TAG, "Issuing device reset...");
+    // 3. Reiniciar el dispositivo MPU6050
+    ESP_LOGI(TAG, "Emitiendo reinicio de hardware al sensor...");
     write_reg(REG_PWR_MGMT_1, 0x80);
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // 4. Wake up sensor and select PLL with X-Axis Gyro reference (more stable than internal 8MHz RC)
+    // 4. Despertar sensor y seleccionar PLL con referencia al giroscopo del eje X
     write_reg(REG_PWR_MGMT_1, 0x01);
     vTaskDelay(pdMS_TO_TICKS(20));
 
-    // 5. Verify device identity
+    // 5. Verificar identidad del dispositivo
     esp_err_t err = verify_who_am_i();
     if (err != ESP_OK) {
         return err;
     }
 
-    // 6. Retrieve flight profile parameters
+    // 6. Obtener configuracion del perfil de vuelo
     const auto* p_cfg = get_profile_config(profile_id);
     if (p_cfg == nullptr) {
-        ESP_LOGE(TAG, "Invalid profile ID: %u", static_cast<unsigned>(profile_id));
+        ESP_LOGE(TAG, "ID de perfil invalido: %u", static_cast<unsigned>(profile_id));
         return ESP_ERR_INVALID_ARG;
     }
 
-    // 7. Configure Digital Low-Pass Filter (CONFIG register 0x1A)
+    // 7. Configurar filtro pasa-bajos digital (registro CONFIG 0x1A)
     write_reg(REG_CONFIG, p_cfg->dlpf_cfg & 0x07);
 
-    // 8. Configure Sample Rate Divider (SMPLRT_DIV register 0x19)
-    // Rate = 1000Hz / (1 + SMPLRT_DIV)
+    // 8. Configurar divisor de tasa de muestreo (registro SMPLRT_DIV 0x19)
+    // Tasa = 1000Hz / (1 + SMPLRT_DIV)
     uint8_t smplrt_div = 0;
     if (p_cfg->rate_hz == 200) {
         smplrt_div = 4; // 1000 / (1 + 4) = 200 Hz
@@ -133,7 +133,7 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
     }
     write_reg(REG_SMPLRT_DIV, smplrt_div);
 
-    // 9. Configure Gyro Full Scale (GYRO_CONFIG register 0x1B)
+    // 9. Configurar fondo de escala del giroscopo (registro GYRO_CONFIG 0x1B)
     uint8_t gyro_fs_sel = 0;
     switch (p_cfg->gyro_fs_dps) {
         case 250:  gyro_fs_sel = 0; s_gyro_scale_to_dps = 1.0f / 131.0f; break;
@@ -144,7 +144,7 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
     }
     write_reg(REG_GYRO_CONFIG, static_cast<uint8_t>(gyro_fs_sel << 3));
 
-    // 10. Configure Accel Full Scale (ACCEL_CONFIG register 0x1C)
+    // 10. Configurar fondo de escala del acelerometro (registro ACCEL_CONFIG 0x1C)
     uint8_t accel_fs_sel = 0;
     switch (p_cfg->accel_fs_g) {
         case 2:  accel_fs_sel = 0; s_accel_scale_to_g = 1.0f / 16384.0f; break;
@@ -155,15 +155,15 @@ esp_err_t MPU6050Driver::init(FlightProfileId profile_id, gpio_num_t sda_pin, gp
     }
     write_reg(REG_ACCEL_CONFIG, static_cast<uint8_t>(accel_fs_sel << 3));
 
-    // 11. Configure Hardware Interrupt Pin (INT_PIN_CFG register 0x37)
-    // Bit 5 = LATCH_INT_EN (0 = 50us pulse), Bit 4 = INT_RD_CLEAR (1 = clear on any read)
+    // 11. Configurar pin de interrupcion hardware (registro INT_PIN_CFG 0x37)
+    // Bit 5 = LATCH_INT_EN (0 = pulso de 50us), Bit 4 = INT_RD_CLEAR (1 = limpiar con cualquier lectura)
     write_reg(REG_INT_PIN_CFG, 0x10);
 
-    // 12. Enable Data Ready Interrupt (INT_ENABLE register 0x38)
+    // 12. Habilitar interrupcion por dato listo Data Ready (registro INT_ENABLE 0x38)
     write_reg(REG_INT_ENABLE, 0x01);
 
     s_is_initialized = true;
-    ESP_LOGI(TAG, "MPU6050 configured for profile %s (%u Hz, Gyro: +/-%u dps, Accel: +/-%u g)",
+    ESP_LOGI(TAG, "MPU6050 configurado para perfil %s (%u Hz, Giro: +/-%u dps, Acel: +/-%u g)",
              p_cfg->name, p_cfg->rate_hz, p_cfg->gyro_fs_dps, p_cfg->accel_fs_g);
 
     return ESP_OK;
@@ -188,7 +188,7 @@ esp_err_t MPU6050Driver::read_burst_raw(InertialRawData& raw) {
 }
 
 void MPU6050Driver::scale_data(const InertialRawData& raw, InertialScaledData& scaled) {
-    // 1. Accelerometer scaling (subtract calibrated static offsets)
+    // 1. Escalado del acelerometro (restando los sesgos estaticos calibrados)
     scaled.accel_g[0] = (static_cast<float>(raw.accel[0]) * s_accel_scale_to_g) - s_calibration.accel_bias_g[0];
     scaled.accel_g[1] = (static_cast<float>(raw.accel[1]) * s_accel_scale_to_g) - s_calibration.accel_bias_g[1];
     scaled.accel_g[2] = (static_cast<float>(raw.accel[2]) * s_accel_scale_to_g) - s_calibration.accel_bias_g[2];
@@ -197,10 +197,10 @@ void MPU6050Driver::scale_data(const InertialRawData& raw, InertialScaledData& s
     scaled.accel_mss[1] = scaled.accel_g[1] * PhysicsConstants::GRAVITY_MSS;
     scaled.accel_mss[2] = scaled.accel_g[2] * PhysicsConstants::GRAVITY_MSS;
 
-    // 2. Die temperature (Celsius)
+    // 2. Temperatura interna del die (grados Celsius)
     scaled.temp_c = (static_cast<float>(raw.temp) / 340.0f) + 36.53f;
 
-    // 3. Gyroscope scaling (subtract calibrated static biases)
+    // 3. Escalado del giroscopo (restando los sesgos estaticos calibrados)
     float gx_dps = (static_cast<float>(raw.gyro[0]) * s_gyro_scale_to_dps) - s_calibration.gyro_bias_dps[0];
     float gy_dps = (static_cast<float>(raw.gyro[1]) * s_gyro_scale_to_dps) - s_calibration.gyro_bias_dps[1];
     float gz_dps = (static_cast<float>(raw.gyro[2]) * s_gyro_scale_to_dps) - s_calibration.gyro_bias_dps[2];
@@ -219,7 +219,7 @@ esp_err_t MPU6050Driver::calibrate_biases(size_t sample_count, CalibrationProgre
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Starting static sensor calibration (%u samples)... Keep vehicle steady!", 
+    ESP_LOGI(TAG, "Iniciando calibracion estatica del sensor (%u muestras)... Mantener vehiculo en reposo!", 
              static_cast<unsigned>(sample_count));
 
     double sum_gx = 0.0, sum_gy = 0.0, sum_gz = 0.0;
@@ -227,7 +227,7 @@ esp_err_t MPU6050Driver::calibrate_biases(size_t sample_count, CalibrationProgre
     size_t valid_samples = 0;
 
     InertialRawData raw{};
-    const size_t report_interval = sample_count / 20; // 5% progress steps
+    const size_t report_interval = sample_count / 20; // Pasos de 5% de progreso
 
     for (size_t i = 0; i < sample_count; ++i) {
         esp_err_t err = read_burst_raw(raw);
@@ -251,7 +251,7 @@ esp_err_t MPU6050Driver::calibrate_biases(size_t sample_count, CalibrationProgre
             valid_samples++;
         }
 
-        // Notify progress periodically
+        // Notificar progreso periodicamente
         if (cb != nullptr && (i % report_interval == 0 || i == sample_count - 1)) {
             uint8_t pct = static_cast<uint8_t>((i * 100) / sample_count);
             float current_bias_rads[3] = {
@@ -266,7 +266,7 @@ esp_err_t MPU6050Driver::calibrate_biases(size_t sample_count, CalibrationProgre
     }
 
     if (valid_samples < sample_count / 2) {
-        ESP_LOGE(TAG, "Calibration failed: Too many I2C read errors (%u/%u)",
+        ESP_LOGE(TAG, "Fallo de calibracion: Exceso de errores de lectura I2C (%u/%u)",
                  static_cast<unsigned>(valid_samples), static_cast<unsigned>(sample_count));
         return ESP_FAIL;
     }
@@ -281,7 +281,7 @@ esp_err_t MPU6050Driver::calibrate_biases(size_t sample_count, CalibrationProgre
 
     s_calibration.accel_bias_g[0] = static_cast<float>(sum_ax / valid_samples);
     s_calibration.accel_bias_g[1] = static_cast<float>(sum_ay / valid_samples);
-    s_calibration.accel_bias_g[2] = static_cast<float>(sum_az / valid_samples) - 1.0f; // Gravity 1g offset on Z
+    s_calibration.accel_bias_g[2] = static_cast<float>(sum_az / valid_samples) - 1.0f; // Compensar 1g de gravedad sobre Z
 
     s_calibration.accel_bias_mss[0] = s_calibration.accel_bias_g[0] * PhysicsConstants::GRAVITY_MSS;
     s_calibration.accel_bias_mss[1] = s_calibration.accel_bias_g[1] * PhysicsConstants::GRAVITY_MSS;
@@ -289,7 +289,7 @@ esp_err_t MPU6050Driver::calibrate_biases(size_t sample_count, CalibrationProgre
 
     s_calibration.is_calibrated = true;
 
-    ESP_LOGI(TAG, "Calibration COMPLETE. Gyro Biases (rad/s): [%.5f, %.5f, %.5f]",
+    ESP_LOGI(TAG, "Calibracion COMPLETADA. Sesgos Giroscopo (rad/s): [%.5f, %.5f, %.5f]",
              s_calibration.gyro_bias_rads[0],
              s_calibration.gyro_bias_rads[1],
              s_calibration.gyro_bias_rads[2]);

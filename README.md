@@ -1,141 +1,137 @@
-# High-Integrity Aerospace Attitude Estimator V2 (ESP32 Dual-Core)
+# Estimador de Actitud Aeroespacial de Alta Integridad V2 (ESP32 Dual-Core)
 
-[![Continuous Integration](https://github.com/alejandromarquesrisso99-arch/esp32_flight_estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/alejandromarquesrisso99-arch/esp32_flight_estimator/actions)
-[![Language](https://img.shields.io/badge/Language-C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![Target](https://img.shields.io/badge/Platform-ESP32%20Dual--Core%20240MHz-red.svg)](https://www.espressif.com/en/products/socs/esp32)
-[![Standard](https://img.shields.io/badge/Standard-DO--178C%20%2F%20MISRA%20Compliant-brightgreen.svg)](https://www.rtca.org/)
+[![Integración Continua](https://github.com/alejandromarquesrisso99-arch/esp32_flight_estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/alejandromarquesrisso99-arch/esp32_flight_estimator/actions)
+[![Lenguaje](https://img.shields.io/badge/Lenguaje-C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Plataforma](https://img.shields.io/badge/Plataforma-ESP32%20Dual--Core%20240MHz-red.svg)](https://www.espressif.com/en/products/socs/esp32)
+[![Estándar](https://img.shields.io/badge/Est%C3%A1ndar-DO--178C%20%2F%20MISRA%20Compliant-brightgreen.svg)](https://www.rtca.org/)
 
-A mission-critical, hard real-time **7-State Extended Kalman Filter (EKF)** Attitude and Heading Reference System (AHRS) designed for autonomous aerial vehicles (drones, sounding rockets, and guided missiles) on the **ESP32 dual-core Xtensa microcontroller**.
+Sistema de referencia de actitud y rumbo (AHRS) de tiempo real duro basado en un **Filtro de Kalman Extendido (EKF) de 7 estados**, diseñado para vehículos aéreos no tripulados (drones, cohetes sonda y proyectiles guiados) sobre el **microcontrolador Xtensa de doble núcleo ESP32**.
 
 ---
 
-## 🏛️ System Architecture
+## Arquitectura del Sistema
 
 ```mermaid
 flowchart TD
-    subgraph Core_1 [Core 1: Deterministic Hard Real-Time Domain (Priority 24)]
-        DRDY[MPU6050 DRDY GPIO 19] -->|IRAM ISR Direct Notify| GNC_Task[Tarea GNC - 200Hz a 1000Hz]
-        GPTimer[1MHz GPTimer Backup] -->|Timeout 1.5x T_sample| GNC_Task
-        GNC_Task -->|1. Burst Read 14B| MPU[MPU6050 Driver Fast-Mode]
-        GNC_Task -->|2. Feed Watchdog| Feed[timer_watchdog_feed]
-        GNC_Task -->|3. Health Supervisor| FDIR[FDIR Manager]
-        FDIR -->|G-Gating & Rate Limits| EKF_7D[EKF 7-State Engine]
-        EKF_7D -->|4. Joseph Covariance Update| EKF_State[q0..q3, bx..bz]
-        EKF_State -->|5. Benchmark WCET cycles| WCET[CPU Cycle Counter]
-        WCET -->|6. Overwrite Queue| StaticQueue[g_telemetry_queue]
+    subgraph Core_1 [Núcleo 1: Dominio de Tiempo Real Duro Determinista (Prioridad 24)]
+        DRDY[MPU6050 DRDY GPIO 19] -->|Notificación Directa ISR en IRAM| GNC_Task[Tarea GNC - 200Hz a 1000Hz]
+        GPTimer[Respaldo GPTimer 1MHz] -->|Timeout 1.5x T_muestreo| GNC_Task
+        GNC_Task -->|1. Lectura en Ráfaga 14B| MPU[Driver MPU6050 Fast-Mode]
+        GNC_Task -->|2. Alimentar Watchdog| Feed[timer_watchdog_feed]
+        GNC_Task -->|3. Supervisor de Salud| FDIR[Gestor FDIR]
+        FDIR -->|G-Gating y Límites de Tasa| EKF_7D[Motor EKF de 7 Estados]
+        EKF_7D -->|4. Actualización de Covarianza Joseph| EKF_State[q0..q3, bx..bz]
+        EKF_State -->|5. Medición de Ciclos WCET| WCET[Contador de Ciclos CPU]
+        WCET -->|6. Sobrescribir Cola| StaticQueue[g_telemetry_queue]
     end
 
-    subgraph Core_0 [Core 0: Service & Telemetry Domain (Priority 3)]
-        StaticQueue -->|xQueueReceive 0-delay| TelemTask[Telemetry Task]
-        TelemTask -->|Fletcher-16 Binary Framing| UART[UART0 @ 115200 Baud]
-        UART -->|Live Streaming| GroundStation[Processing Ground Station]
-        GroundStation -->|Profile Handshake| TelemTask
+    subgraph Core_0 [Núcleo 0: Dominio de Servicio y Telemetría (Prioridad 3)]
+        StaticQueue -->|xQueueReceive sin bloqueo| TelemTask[Tarea de Telemetría]
+        TelemTask -->|Framing Binario Fletcher-16| UART[UART0 @ 115200 Baudios]
+        UART -->|Transmisión en Vivo| GroundStation[Estación Terrena en Processing]
+        GroundStation -->|Handshake de Perfil| TelemTask
     end
 ```
 
 ---
 
-## ✨ Key Technical Highlights
+## Aspectos Técnicos Destacados
 
-1. **Strict Zero-Heap & Static Memory Policy:**
-   * Fully static memory allocation (`xTaskCreateStaticPinnedToCore`, static FreeRTOS queues, no `malloc`/`new` in runtime).
-   * Complies with **DO-178C Level A** and **MISRA C++** aerospace safety guidelines.
-2. **Asymmetric Dual-Core Isolation:**
-   * **Core 1 (Real-Time Domain, Priority 24):** Dedicated solely to sensor acquisition, hardware watchdog management, FDIR, and mathematical execution of the EKF.
-   * **Core 0 (Service Domain, Priority 3):** Dedicated to UART framing, Fletcher-16 packet validation, command parsing, and operator state machines.
-3. **7-State Extended Kalman Filter ($x \in \mathbb{R}^7$):**
-   * State vector: $x = [q_0, q_1, q_2, q_3, b_{\omega x}, b_{\omega y}, b_{\omega z}]^T$.
-   * Propagates attitude kinematics and dynamic gyroscope bias drift online.
-   * Numerically stable **Joseph Form Covariance Update**: $P_k = (I - K_k H_k) P_{k|k-1} (I - K_k H_k)^T + K_k R_k K_k^T$.
-4. **Hardware Synchronization & Fail-Safe Backup:**
-   * Primary sync: MPU6050 physical `INT` (Data Ready) pin on `GPIO 19` triggering an IRAM-resident ISR.
-   * Secondary sync: Hardware `GPTimer` at 1 MHz configured for auto-reload at $1.5 \times T_{\text{sample}}$.
-5. **Fault Detection, Isolation and Recovery (FDIR):**
-   * **High-G Impact Gating:** Automatically detects non-gravitational accelerations ($|\|\vec{a}\| - 1g| > \text{threshold}$) and decouples the accelerometer from the EKF to prevent attitude corruption.
-   * **Dynamic Rate Limiter:** Audits angular velocities against profile-specific physical limits.
-   * **Bus Fault Isolation:** Declares `HARD_FAULT_LOCK` if $\ge 5$ consecutive I2C read operations fail.
-6. **Processing P3D Ground Station (Zero Gimbal Lock):**
-   * 3D model orientation driven strictly by **pure quaternion rotation matrices** (`applyQuaternionRotation`), eliminating Euler gimbal lock across full $360^\circ$ spatial rotations.
+1. **Política Estricta de Memoria Estática y Cero Asignación Dinámica (*Zero-Heap*):**
+   * Asignación de memoria enteramente estática (`xTaskCreateStaticPinnedToCore`, colas estáticas de FreeRTOS, sin llamadas a `malloc` ni `new` durante la ejecución).
+   * Diseñado bajo principios de seguridad aeroespacial **DO-178C Nivel A** y directrices **MISRA C++**.
+2. **Aislamiento Multinúcleo Asimétrico:**
+   * **Núcleo 1 (Dominio de Tiempo Real, Prioridad 24):** Dedicado exclusivamente a la adquisición inercial, gestión de temporizadores watchdog, FDIR y cómputo algebraico del EKF.
+   * **Núcleo 0 (Dominio de Servicio, Prioridad 3):** Dedicado al empaquetado UART, validación de tramas mediante checksum Fletcher-16, procesamiento de comandos y máquinas de estados de operador.
+3. **Filtro de Kalman Extendido de 7 Estados ($x \in \mathbb{R}^7$):**
+   * Vector de estado: $x = [q_0, q_1, q_2, q_3, b_{\omega x}, b_{\omega y}, b_{\omega z}]^T$.
+   * Propaga la cinemática de actitud y estima dinámicamente la deriva de sesgo del giróscopo.
+   * **Actualización de Covarianza en Forma de Joseph** numéricamente estabilizada: $P_k = (I - K_k H_k) P_{k|k-1} (I - K_k H_k)^T + K_k R_k K_k^T$.
+4. **Sincronización Hardware y Respaldo de Seguridad:**
+   * Sincronización primaria: Señal física de interrupción `INT` (Data Ready) del MPU6050 en `GPIO 19` conectada a una ISR residente en IRAM.
+   * Sincronización secundaria: Temporizador por hardware `GPTimer` a 1 MHz configurado para autorrecarga a $1.5 \times T_{\text{muestreo}}$.
+5. **Detección, Aislamiento y Recuperación de Fallos (FDIR):**
+   * **Rechazo de Aceleraciones No Gravitatorias (*G-Gating*):** Detecta aceleraciones dinámicas espurias ($|\|\vec{a}\| - 1g| > \text{umbral}$) y desacopla el acelerómetro del EKF para evitar la corrupción de actitud.
+   * **Limitador de Dinámica:** Audita las velocidades angulares respecto a los límites físicos del perfil activo.
+   * **Aislamiento de Fallos de Bus:** Declara estado `HARD_FAULT_LOCK` si ocurren $\ge 5$ fallos consecutivos de lectura en el bus I2C.
+6. **Estación Terrena en Processing P3D (Sin Bloqueo Cardánico / Gimbal Lock):**
+   * Orientación 3D impulsada estrictamente por **matrices de rotación de cuaternión puro** (`applyQuaternionRotation`), eliminando el bloqueo cardánico en rotaciones completas de $360^\circ$.
 
 ---
 
-## 🚀 Flight Profiles
+## Perfiles de Vuelo
 
-| Profile ID | Profile Name | Loop Rate | Gyro FSR | Accel FSR | DLPF | G-Gating Threshold | Application |
+| ID Perfil | Nombre del Perfil | Frecuencia de Lazo | Rango Giróscopo | Rango Acelerómetro | DLPF | Umbral G-Gating | Aplicación Típica |
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **`0x01`** | `DRONE_HOVER` | **200 Hz** | $\pm 250^\circ/\text{s}$ | $\pm 2g$ | 98 Hz | $0.35g$ | Camera drones, smooth positioning |
-| **`0x02`** | `DRONE_ACRO` | **500 Hz** | $\pm 1000^\circ/\text{s}$ | $\pm 8g$ | 188 Hz | $1.50g$ | Acrobatic FPV, aggressive maneuvers |
-| **`0x03`** | `ROCKET_LAUNCH` | **500 Hz** | $\pm 1000^\circ/\text{s}$ | $\pm 16g$ | 188 Hz | $3.00g$ | Sounding rockets, vertical ascent |
-| **`0x04`** | `MISSILE_HIGH_G`| **1000 Hz**| $\pm 2000^\circ/\text{s}$| $\pm 16g$ | 256 Hz | $5.00g$ | High-speed interceptors, 1ms loop |
+| **`0x01`** | `DRONE_HOVER` | **200 Hz** | $\pm 250^\circ/\text{s}$ | $\pm 2g$ | 98 Hz | $0.35g$ | Drones de fotografía, posicionamiento suave |
+| **`0x02`** | `DRONE_ACRO` | **500 Hz** | $\pm 1000^\circ/\text{s}$ | $\pm 8g$ | 188 Hz | $1.50g$ | Vuelo acrobático FPV, maniobras agresivas |
+| **`0x03`** | `ROCKET_LAUNCH` | **500 Hz** | $\pm 1000^\circ/\text{s}$ | $\pm 16g$ | 188 Hz | $3.00g$ | Cohetes sonda, ascenso vertical |
+| **`0x04`** | `MISSILE_HIGH_G`| **1000 Hz**| $\pm 2000^\circ/\text{s}$| $\pm 16g$ | 256 Hz | $5.00g$ | Interceptores de alta velocidad, lazo de 1 ms |
 
 ---
 
-## 📡 Binary Wire Protocol (Fletcher-16)
+## Protocolo Binario de Comunicación (Fletcher-16)
 
-All frames use packed Little-Endian alignment (`#pragma pack(push, 1)`):
+Todas las tramas utilizan alineación Little-Endian empaquetada (`#pragma pack(push, 1)`):
 
-$$\underbrace{\text{Preamble } [0xAA, 0x55] (2\text{B}) + \text{MsgId } (1\text{B}) + \text{Length } (1\text{B})}_{\text{Header (4 Bytes)}} + \underbrace{\text{Payload } (N\text{ Bytes})}_{\text{Data}} + \underbrace{\text{Fletcher-16 } (2\text{B})}_{\text{Checksum}}$$
+$$\underbrace{\text{Preámbulo } [0xAA, 0x55] (2\text{B}) + \text{IdMensaje } (1\text{B}) + \text{Longitud } (1\text{B})}_{\text{Cabecera (4 Bytes)}} + \underbrace{\text{Carga Útil } (N\text{ Bytes})}_{\text{Datos}} + \underbrace{\text{Fletcher-16 } (2\text{B})}_{\text{Suma de Control}}$$
 
-### Telemetry Packet (`MSG_ESTIMATOR_TELEMETRY` - `0x04` | 80 Bytes)
+### Paquete de Telemetría (`MSG_ESTIMATOR_TELEMETRY` - `0x04` | 80 Bytes)
 
-| Byte Offset | Type | Field | Unit / Range | Description |
+| Offset (Bytes) | Tipo | Campo | Unidad / Rango | Descripción |
 | :---: | :---: | :--- | :---: | :--- |
-| **0 – 1** | `uint8_t[2]` | `preamble` | `0xAA, 0x55` | Synchronization header |
-| **2** | `uint8_t` | `msg_id` | `0x04` | Message ID |
-| **3** | `uint8_t` | `payload_len` | `74` | Payload byte length |
-| **4 – 7** | `uint32_t` | `timestamp_us` | $\mu\text{s}$ | ESP32 hardware timer timestamp |
-| **8 – 23** | `float[4]` | `q[0..3]` | $[-1, 1]$ | Normalized quaternion $[q_w, q_x, q_y, q_z]$ |
-| **24 – 35** | `float[3]` | `euler_deg` | Degrees | Euler angles $[Roll, Pitch, Yaw]$ |
-| **36 – 47** | `float[3]` | `gyro_dps` | $^\circ/\text{s}$ | Calibrated body rates $[\omega_x, \omega_y, \omega_z]$ |
-| **48 – 59** | `float[3]` | `accel_g` | $g$ | Calibrated body specific forces $[a_x, a_y, a_z]$ |
-| **60 – 63** | `uint32_t` | `wcet_cycles` | Cycles | Measured CPU cycles of EKF step |
-| **64 – 67** | `float` | `wcet_us` | $\mu\text{s}$ | WCET execution time in microseconds |
-| **68 – 71** | `float` | `loop_freq_hz` | Hz | Measured GNC task execution frequency |
-| **72 – 75** | `uint32_t` | `health_flags` | Bitmask | FDIR health status flags |
-| **76** | `uint8_t` | `system_state` | Enum | FSM state (`3 = RUNNING_ESTIMATOR`) |
-| **77** | `uint8_t` | `active_profile_id` | Enum | Active profile ID (`1..4`) |
-| **78 – 79** | `uint16_t` | `checksum` | Fletcher-16 | Checksum calculated over bytes 2..77 |
+| **0 – 1** | `uint8_t[2]` | `preamble` | `0xAA, 0x55` | Cabecera de sincronización |
+| **2** | `uint8_t` | `msg_id` | `0x04` | Identificador del mensaje |
+| **3** | `uint8_t` | `payload_len` | `74` | Longitud en bytes de la carga útil |
+| **4 – 7** | `uint32_t` | `timestamp_us` | $\mu\text{s}$ | Marca de tiempo del hardware timer del ESP32 |
+| **8 – 23** | `float[4]` | `q[0..3]` | $[-1, 1]$ | Cuaternión normalizado $[q_w, q_x, q_y, q_z]$ |
+| **24 – 35** | `float[3]` | `euler_deg` | Grados | Ángulos de Euler $[Roll, Pitch, Yaw]$ |
+| **36 – 47** | `float[3]` | `gyro_dps` | $^\circ/\text{s}$ | Velocidades angulares calibradas $[\omega_x, \omega_y, \omega_z]$ |
+| **48 – 59** | `float[3]` | `accel_g` | $g$ | Fuerzas específicas calibradas $[a_x, a_y, a_z]$ |
+| **60 – 63** | `uint32_t` | `wcet_cycles` | Ciclos | Ciclos de CPU medidos en el paso del EKF |
+| **64 – 67** | `float` | `wcet_us` | $\mu\text{s}$ | Tiempo de ejecución medido en microsegundos |
+| **68 – 71** | `float` | `loop_freq_hz` | Hz | Frecuencia de ejecución medida de la tarea GNC |
+| **72 – 75** | `uint32_t` | `health_flags` | Máscara de bits | Banderas de estado y salud FDIR |
+| **76** | `uint8_t` | `system_state` | Enumeración | Estado del sistema (`3 = RUNNING_ESTIMATOR`) |
+| **77** | `uint8_t` | `active_profile_id` | Enumeración | Identificador del perfil activo (`1..4`) |
+| **78 – 79** | `uint16_t` | `checksum` | Fletcher-16 | Suma de control calculada sobre los bytes 2..77 |
 
 ---
 
-## ⏱️ Benchmarking & WCET Results
+## Resultados de Rendimiento y Medición de WCET
 
-Empirical worst-case execution time (WCET) measured via `esp_cpu_get_cycle_count()` on ESP32 Core 1 @ 240 MHz:
+Tiempo de ejecución en el peor caso (**WCET**) medido mediante `esp_cpu_get_cycle_count()` en el Núcleo 1 del ESP32 a 240 MHz:
 
-* **EKF Predict Step ($7\times 7$ Jacobian + Matrix Multiply):** $\approx 22.4\,\mu\text{s}$ (5,380 cycles)
-* **EKF Update Step (Joseph Covariance Form + Normalization):** $\approx 38.6\,\mu\text{s}$ (9,260 cycles)
-* **Total GNC Loop Execution Time:** **$\approx 61.0\,\mu\text{s}$** (14,640 cycles)
-* **CPU Margin at 1000 Hz (1 ms Time Budget):** **$93.9\%$ Idle / Margin Reserve**
+* **Paso de Predicción del EKF (Jacobiano $7\times 7$ + Multiplicación Matricial):** $\approx 22.4\,\mu\text{s}$ (5.380 ciclos)
+* **Paso de Actualización del EKF (Forma de Covarianza Joseph + Normalización):** $\approx 38.6\,\mu\text{s}$ (9.260 ciclos)
+* **Tiempo Total de Ejecución del Lazo GNC:** **$\approx 61.0\,\mu\text{s}$** (14.640 ciclos)
+* **Margen de CPU a 1000 Hz (Presupuesto de 1 ms):** **$93.9\%$ de tiempo de reserva / inactividad**
 
 ---
 
-## 🛠️ Build & Flash Instructions
+## Instrucciones de Compilación y Ejecución
 
-### Prerequisites
-* ESP-IDF v5.3+ installed.
-* Processing 4.x (for Ground Station visualizer).
-* CMake 3.16+ & MSVC/GCC (for host unit tests).
+### Requisitos Previos
+* ESP-IDF v5.3+ instalado.
+* Processing 4.x (para la estación terrena gráfica).
+* CMake 3.16+ y MSVC/GCC (para la suite de pruebas unitarias en PC).
 
-### 1. Run Host Unit Tests (PC)
+### 1. Ejecución de Pruebas Unitarias en PC
 ```bash
 cmake -B build_test -S test
-cmake --build build_test
-ctest --test-dir build_test --output-on-failure
+cmake --build build_test --config Debug
+ctest --test-dir build_test -C Debug --output-on-failure
 ```
 
-### 2. Build & Flash ESP32 Firmware
+### 2. Compilación y Grabación del Firmware en ESP32
 ```bash
 idf.py set-target esp32
 idf.py build
 idf.py -p COM7 -b 115200 flash
 ```
 
-### 3. Run Processing 3D Ground Station
-1. Open `tools/processing_visualizer/FlightVisualizerV2/FlightVisualizerV2.pde` in Processing.
-2. Click **Run**.
-3. Select serial port `COM7` and click on the desired flight profile to initiate automatic calibration and 3D telemetry streaming.
+### 3. Ejecución de la Estación Terrena en Processing 3D
+1. Abrir `tools/processing_visualizer/FlightVisualizerV2/FlightVisualizerV2.pde` en Processing.
+2. Hacer clic en **Run**.
+3. Seleccionar el puerto serie `COM7` y presionar sobre el perfil de vuelo deseado para iniciar la calibración automática y la transmisión de telemetría 3D.
 
----
-
-## 📄 License
-MIT License. Developed for aerospace embedded control and autonomous navigation research.

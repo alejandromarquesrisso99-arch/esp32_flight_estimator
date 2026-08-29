@@ -9,24 +9,24 @@
 namespace flight {
 namespace protocol {
 
-// Preambles for synchronization
+// Preámbulos de sincronización de trama
 constexpr uint8_t PREAMBLE_0 = 0xAA;
 constexpr uint8_t PREAMBLE_1 = 0x55;
 
 /**
- * @brief Message / Packet Identifier
+ * @brief Identificador de mensaje / paquete
  */
 enum class MsgId : uint8_t {
-    HEARTBEAT_AWAIT_PROFILE = 0x01,  ///< ESP32 -> Processing (10 Hz in AWAITING_PROFILE)
-    CMD_SET_PROFILE         = 0x02,  ///< Processing -> ESP32 (Select profile)
-    BIST_REPORT             = 0x03,  ///< ESP32 -> Processing (Calibration & Self-Test info)
-    ESTIMATOR_TELEMETRY     = 0x04,  ///< ESP32 -> Processing (30-50 Hz in RUNNING_ESTIMATOR)
-    ACK_NACK                = 0x05,  ///< ESP32 <-> Processing (Acknowledge packet)
-    CMD_SYSTEM_RESET        = 0x06   ///< Processing -> ESP32 (Trigger software reset)
+    HEARTBEAT_AWAIT_PROFILE = 0x01,  ///< ESP32 -> Processing (10 Hz en estado AWAITING_PROFILE)
+    CMD_SET_PROFILE         = 0x02,  ///< Processing -> ESP32 (Selección de perfil)
+    BIST_REPORT             = 0x03,  ///< ESP32 -> Processing (Informe de calibración y autodiagnóstico)
+    ESTIMATOR_TELEMETRY     = 0x04,  ///< ESP32 -> Processing (30-50 Hz en estado RUNNING_ESTIMATOR)
+    ACK_NACK                = 0x05,  ///< ESP32 <-> Processing (Acuse de recibo de trama)
+    CMD_SYSTEM_RESET        = 0x06   ///< Processing -> ESP32 (Disparo de reinicio por software)
 };
 
 /**
- * @brief ACK / NACK Status Codes
+ * @brief Códigos de estado para tramas ACK / NACK
  */
 enum class AckStatus : uint8_t {
     ACK                 = 0x00,
@@ -39,67 +39,67 @@ enum class AckStatus : uint8_t {
 #pragma pack(push, 1)
 
 /**
- * @brief Standard Frame Header
+ * @brief Cabecera estándar de trama
  */
 struct FrameHeader {
     uint8_t preamble[2];    ///< {0xAA, 0x55}
-    uint8_t msg_id;         ///< MsgId enum
-    uint8_t payload_len;    ///< Length of payload following header
+    uint8_t msg_id;         ///< Enumeración MsgId
+    uint8_t payload_len;    ///< Longitud de la carga útil siguiente
 };
 
 /**
- * @brief Payload for MSG_HEARTBEAT_AWAIT_PROFILE (0x01)
+ * @brief Carga útil para MSG_HEARTBEAT_AWAIT_PROFILE (0x01)
  */
 struct PayloadHeartbeat {
     uint32_t uptime_ms;
-    uint8_t  system_state;  ///< SystemState enum
-    uint32_t health_flags;  ///< HealthFlags bitmask
+    uint8_t  system_state;  ///< Enumeración SystemState
+    uint32_t health_flags;  ///< Máscara de bits HealthFlags
 };
 
 /**
- * @brief Payload for MSG_CMD_SET_PROFILE (0x02)
+ * @brief Carga útil para MSG_CMD_SET_PROFILE (0x02)
  */
 struct PayloadCmdSetProfile {
     uint8_t profile_id;     ///< FlightProfileId (1, 2, 3, 4)
 };
 
 /**
- * @brief Payload for MSG_BIST_REPORT (0x03)
+ * @brief Carga útil para MSG_BIST_REPORT (0x03)
  */
 struct PayloadBistReport {
-    uint8_t bist_code;      ///< BistCode enum
-    uint8_t progress_pct;   ///< Calibration progress 0-100%
-    float   gyro_bias[3];   ///< Calibrated gyro bias in rad/s (X, Y, Z)
-    float   accel_bias[3];  ///< Calibrated accel bias in m/s^2 (X, Y, Z)
+    uint8_t bist_code;      ///< Enumeración BistCode
+    uint8_t progress_pct;   ///< Porcentaje de progreso de calibración (0-100%)
+    float   gyro_bias[3];   ///< Sesgo calibrado de giróscopo en rad/s (X, Y, Z)
+    float   accel_bias[3];  ///< Sesgo calibrado de acelerómetro en m/s^2 (X, Y, Z)
 };
 
 /**
- * @brief Payload for MSG_ESTIMATOR_TELEMETRY (0x04)
+ * @brief Carga útil para MSG_ESTIMATOR_TELEMETRY (0x04)
  */
 struct PayloadTelemetry {
-    uint32_t timestamp_us;      ///< Hardware timestamp in microseconds
-    float    q[4];              ///< Normalized quaternion [qw, qx, qy, qz]
-    float    euler_deg[3];      ///< Euler angles [Roll, Pitch, Yaw] in degrees
-    float    gyro_dps[3];       ///< Calibrated gyro rate [wx, wy, wz] in deg/s
-    float    accel_g[3];        ///< Calibrated accel [ax, ay, az] in g
-    uint32_t wcet_cycles;       ///< Worst-case cycle count on Core 1
-    float    wcet_us;           ///< Worst-case execution time in us
-    float    loop_freq_hz;      ///< Measured GNC task frequency in Hz
-    uint32_t health_flags;      ///< HealthFlags bitmask
-    uint8_t  system_state;      ///< SystemState enum
-    uint8_t  active_profile_id; ///< Active FlightProfileId
+    uint32_t timestamp_us;      ///< Marca de tiempo del hardware timer en microsegundos
+    float    q[4];              ///< Cuaternión normalizado [qw, qx, qy, qz]
+    float    euler_deg[3];      ///< Ángulos de Euler [Roll, Pitch, Yaw] en grados
+    float    gyro_dps[3];       ///< Velocidad angular calibrada [wx, wy, wz] en deg/s
+    float    accel_g[3];        ///< Aceleración calibrada [ax, ay, az] en g
+    uint32_t wcet_cycles;       ///< Peor recuento de ciclos de CPU en el Núcleo 1
+    float    wcet_us;           ///< Tiempo de ejecución en el peor caso en microsegundos
+    float    loop_freq_hz;      ///< Frecuencia de ejecución medida de la tarea GNC en Hz
+    uint32_t health_flags;      ///< Máscara de bits HealthFlags
+    uint8_t  system_state;      ///< Enumeración SystemState
+    uint8_t  active_profile_id; ///< Identificador de FlightProfileId activo
 };
 
 /**
- * @brief Payload for MSG_ACK_NACK (0x05)
+ * @brief Carga útil para MSG_ACK_NACK (0x05)
  */
 struct PayloadAckNack {
-    uint8_t ref_msg_id;     ///< MsgId being acknowledged
-    uint8_t status;         ///< AckStatus enum
+    uint8_t ref_msg_id;     ///< MsgId del mensaje al que responde
+    uint8_t status;         ///< Enumeración AckStatus
 };
 
 /**
- * @brief Complete Telemetry Packet Wire Representation
+ * @brief Estructura completa de paquete de telemetría en el canal físico
  */
 template <typename TPayload>
 struct Packet {
@@ -111,8 +111,8 @@ struct Packet {
 #pragma pack(pop)
 
 /**
- * @brief Standard Fletcher-16 checksum computation
- * Computes over the msg_id, payload_len, and payload bytes.
+ * @brief Cálculo de la suma de control estándar Fletcher-16
+ * Se calcula sobre msg_id, payload_len y los bytes de la carga útil.
  */
 inline uint16_t calculate_fletcher16(const uint8_t* data, size_t length) {
     uint16_t sum1 = 0;
@@ -125,7 +125,7 @@ inline uint16_t calculate_fletcher16(const uint8_t* data, size_t length) {
 }
 
 /**
- * @brief Helper to initialize a standard packet with preambles and correct length
+ * @brief Inicializa un paquete estándar con preámbulos y longitud correspondiente
  */
 template <typename TPayload>
 inline void init_packet(Packet<TPayload>& pkt, MsgId id) {
@@ -136,32 +136,32 @@ inline void init_packet(Packet<TPayload>& pkt, MsgId id) {
 }
 
 /**
- * @brief Helper to finalize packet by computing and writing the Fletcher-16 checksum
+ * @brief Finaliza el paquete calculando y escribiendo la suma de control Fletcher-16
  */
 template <typename TPayload>
 inline void finalize_packet(Packet<TPayload>& pkt) {
-    // Checksum calculated over msg_id, payload_len and payload data
+    // La suma de control se calcula sobre msg_id, payload_len y los datos de payload
     const uint8_t* start_ptr = &pkt.header.msg_id;
     const size_t len = 2 + sizeof(TPayload); // msg_id + payload_len + sizeof(payload)
     pkt.checksum = calculate_fletcher16(start_ptr, len);
 }
 
 /**
- * @brief Helper to verify checksum of an incoming frame
+ * @brief Verifica la suma de control de una trama entrante
  */
 inline bool verify_checksum(uint8_t msg_id, uint8_t payload_len, const uint8_t* payload, uint16_t received_checksum) {
     uint16_t sum1 = 0;
     uint16_t sum2 = 0;
     
-    // Process msg_id
+    // Procesar msg_id
     sum1 = (sum1 + msg_id) % 255;
     sum2 = (sum2 + sum1) % 255;
 
-    // Process payload_len
+    // Procesar payload_len
     sum1 = (sum1 + payload_len) % 255;
     sum2 = (sum2 + sum1) % 255;
 
-    // Process payload
+    // Procesar carga útil
     for (size_t i = 0; i < payload_len; ++i) {
         sum1 = (sum1 + payload[i]) % 255;
         sum2 = (sum2 + sum1) % 255;
@@ -173,3 +173,4 @@ inline bool verify_checksum(uint8_t msg_id, uint8_t payload_len, const uint8_t* 
 
 } // namespace protocol
 } // namespace flight
+

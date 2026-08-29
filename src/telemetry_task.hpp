@@ -8,26 +8,26 @@
 
 namespace flight {
 
-// Shared queue handle for Core 1 -> Core 0 communication
+// Descriptor de cola compartida para comunicación del Núcleo 1 al Núcleo 0
 extern QueueHandle_t g_telemetry_queue;
 
-// Global system state & active profile
+// Variables globales de estado del sistema y perfil activo
 extern volatile SystemState     g_system_state;
 extern volatile FlightProfileId g_active_profile;
 extern std::atomic<uint32_t>    g_health_flags;
 
 /**
- * @brief Initialize static resources for telemetry task on Core 0
+ * @brief Inicializa recursos estáticos para la tarea de telemetría en el Núcleo 0
  */
 void telemetry_task_init();
 
 /**
- * @brief Telemetry task loop executed on Core 0
+ * @brief Bucle de ejecución de la tarea de telemetría en el Núcleo 0
  */
 void telemetry_task_run(void* pvParameters);
 
 /**
- * @brief Send BIST and sensor calibration report to Ground Station
+ * @brief Envía informe de autodiagnóstico (BIST) y calibración hacia la estación terrena
  */
 void telemetry_send_bist_report(uint8_t bist_code, 
                                uint8_t progress_pct, 
@@ -35,3 +35,4 @@ void telemetry_send_bist_report(uint8_t bist_code,
                                const float accel_bias_mss[3]);
 
 } // namespace flight
+

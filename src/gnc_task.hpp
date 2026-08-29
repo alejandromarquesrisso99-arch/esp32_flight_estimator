@@ -7,18 +7,19 @@
 namespace flight {
 
 /**
- * @brief Initialize static resources for GNC task pinned to Core 1 (Priority 24)
+ * @brief Inicializa recursos estaticos para la tarea GNC anclada al Nucleo 1 (Prioridad 24)
  */
 void gnc_task_init();
 
 /**
- * @brief GNC Task execution loop on Core 1 (Hard Real-Time 200 Hz - 1000 Hz)
+ * @brief Bucle de ejecucion de la tarea GNC en el Nucleo 1 (Tiempo Real Duro 200 Hz - 1000 Hz)
  */
 void gnc_task_run(void* pvParameters);
 
 /**
- * @brief Get the FreeRTOS TaskHandle of the GNC task (used for DRDY/GPTimer ISR notifications)
+ * @brief Obtiene el descriptor TaskHandle de la tarea GNC (utilizado para notificaciones ISR de DRDY/GPTimer)
  */
 TaskHandle_t gnc_task_get_handle();
 
 } // namespace flight
+

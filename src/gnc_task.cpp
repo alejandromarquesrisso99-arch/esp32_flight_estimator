@@ -14,16 +14,16 @@ static const char* TAG = "GNC_CORE1";
 
 namespace flight {
 
-// FreeRTOS Static Allocation Buffers (Zero-Heap Policy)
+// Búferes de asignación estática de FreeRTOS (Política Zero-Heap)
 static constexpr size_t GNC_STACK_SZ = 8192;
 static StackType_t   s_gnc_stack[GNC_STACK_SZ];
 static StaticTask_t  s_gnc_tcb;
 static TaskHandle_t  s_gnc_task_handle = nullptr;
 
-// 7-State Extended Kalman Filter (Static instance)
+// Instancia estática del Filtro de Kalman Extendido (EKF 7D)
 static ExtendedKalmanFilter s_ekf;
 
-// Metrics & Diagnostics
+// Métricas de ejecución y diagnóstico
 static uint32_t s_max_wcet_cycles = 0;
 static float    s_loop_freq_hz    = 0.0f;
 static uint64_t s_last_loop_us    = 0;
@@ -33,38 +33,38 @@ TaskHandle_t gnc_task_get_handle() {
 }
 
 void gnc_task_init() {
-    // 1. Create static FreeRTOS task pinned to Core 1 (Priority 24 - Hard Real-Time)
+    // 1. Crear tarea estática de FreeRTOS anclada al Núcleo 1 (Prioridad 24 - Tiempo Real Duro)
     s_gnc_task_handle = xTaskCreateStaticPinnedToCore(
         gnc_task_run,
         "GncTask",
         GNC_STACK_SZ,
         nullptr,
-        24,                   // Priority 24 (Maximum Hard Real-Time Domain)
+        24,                   // Prioridad 24 (Máximo Dominio de Tiempo Real)
         s_gnc_stack,
         &s_gnc_tcb,
-        1                     // Strictly pinned to Core 1
+        1                     // Estrictamente anclada al Núcleo 1
     );
     assert(s_gnc_task_handle != nullptr);
 
-    ESP_LOGI(TAG, "GNC Task initialized on Core 1 (Priority 24, Zero-Heap Static Allocation)");
+    ESP_LOGI(TAG, "Tarea GNC inicializada en Nucleo 1 (Prioridad 24, Asignacion Estatica Zero-Heap)");
 }
 
 void gnc_task_run(void* pvParameters) {
     (void)pvParameters;
     FlightProfileId current_profile = FlightProfileId::UNKNOWN;
 
-    ESP_LOGI(TAG, "GNC Core 1 loop running, awaiting system start...");
+    ESP_LOGI(TAG, "Bucle GNC en Nucleo 1 en ejecucion, esperando inicio del sistema...");
 
     while (true) {
-        // Wait for synchronization notification from DRDY ISR or GPTimer Watchdog Alarm (20ms timeout fail-safe)
+        // Esperar notificación de sincronización de la ISR DRDY o de la alarma del Watchdog GPTimer (timeout seguro de 20ms)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20));
 
-        // Only process EKF when the vehicle is in RUNNING_ESTIMATOR state
+        // Procesar EKF exclusivamente cuando el vehículo esté en estado RUNNING_ESTIMATOR
         if (g_system_state != SystemState::RUNNING_ESTIMATOR) {
             continue;
         }
 
-        // Initialize EKF profile and FDIR when transition to RUNNING_ESTIMATOR first occurs
+        // Inicializar perfil de EKF y FDIR cuando ocurra la primera transición a RUNNING_ESTIMATOR
         if (current_profile != g_active_profile) {
             current_profile = g_active_profile;
             s_ekf.setProfile(current_profile);
@@ -75,17 +75,17 @@ void gnc_task_run(void* pvParameters) {
             const auto* p_cfg = get_profile_config(current_profile);
             if (p_cfg != nullptr) {
                 s_loop_freq_hz = static_cast<float>(p_cfg->rate_hz);
-                // Initialize DRDY and GPTimer watchdog
+                // Inicializar sincronización DRDY y watchdog GPTimer
                 drivers::drdy_sync_init(drivers::DEFAULT_DRDY_GPIO, s_gnc_task_handle);
                 timer_watchdog_init(current_profile, s_gnc_task_handle);
                 timer_watchdog_start();
             }
-            ESP_LOGI(TAG, "EKF 7D & FDIR initialized for profile: %u (%s)", 
+            ESP_LOGI(TAG, "EKF 7D y FDIR inicializados para perfil: %u (%s)", 
                      static_cast<unsigned>(current_profile),
                      get_profile_config(current_profile)->name);
         }
 
-        // 1. Read burst data from MPU6050 (14 bytes atomically over I2C)
+        // 1. Lectura en ráfaga del MPU6050 (14 bytes atómicos por I2C)
         drivers::InertialRawData raw{};
         drivers::InertialScaledData scaled{};
         esp_err_t err = drivers::MPU6050Driver::read_burst_raw(raw);
@@ -99,13 +99,13 @@ void gnc_task_run(void* pvParameters) {
         FDIRManager::register_i2c_success();
         g_health_flags.fetch_or(HEALTH_FLAG_IMU_OK, std::memory_order_relaxed);
 
-        // Scale data and subtract calibrated gyro biases
+        // Escalar datos y sustraer sesgos calibrados
         drivers::MPU6050Driver::scale_data(raw, scaled);
 
-        // 2. Feed hardware GPTimer watchdog
+        // 2. Alimentar watchdog hardware GPTimer
         timer_watchdog_feed();
 
-        // 3. High-resolution delta time computation
+        // 3. Cálculo de delta de tiempo de alta resolución
         uint64_t now_us = esp_timer_get_time();
         float dt = static_cast<float>(now_us - s_last_loop_us) * 1e-6f;
         s_last_loop_us = now_us;
@@ -115,17 +115,17 @@ void gnc_task_run(void* pvParameters) {
             dt = nominal_dt;
         }
 
-        // 4. FDIR Health & Dynamic bounds checking
+        // 4. Verificación de salud y límites dinámicos FDIR
         FDIRManager::process_sample(scaled, dt, g_health_flags);
 
-        // 5. Benchmark WCET with hardware CPU cycle counter
+        // 5. Medición de WCET con contador de ciclos de CPU hardware
         uint32_t cycle_start = esp_cpu_get_cycle_count();
 
-        // 6. EKF Predict Step: propagate quaternion kinematics and covariance P
+        // 6. Paso de Predicción del EKF: propagación cinemática del cuaternión y covarianza P
         Vector3f gyro_vec{scaled.gyro_rads[0], scaled.gyro_rads[1], scaled.gyro_rads[2]};
         s_ekf.predict(gyro_vec, dt);
 
-        // 7. EKF Update Step: gated accelerometer gravity correction
+        // 7. Paso de Actualización del EKF: corrección por vector de gravedad con G-Gating
         if (FDIRManager::should_fuse_accelerometer(scaled, g_health_flags)) {
             Vector3f accel_vec{scaled.accel_mss[0], scaled.accel_mss[1], scaled.accel_mss[2]};
             s_ekf.update(accel_vec);
@@ -137,7 +137,7 @@ void gnc_task_run(void* pvParameters) {
             s_max_wcet_cycles = elapsed_cycles;
         }
 
-        // 7. Calculate Euler angles from normalized quaternion
+        // 8. Cálculo de ángulos de Euler a partir del cuaternión normalizado
         float q0 = s_ekf.x(0), q1 = s_ekf.x(1), q2 = s_ekf.x(2), q3 = s_ekf.x(3);
         float sin_p = 2.0f * (q0 * q2 - q3 * q1);
         if (sin_p > 1.0f)  sin_p = 1.0f;
@@ -153,11 +153,11 @@ void gnc_task_run(void* pvParameters) {
         float yaw_deg = std::atan2(2.0f * (q0 * q3 + q1 * q2), 
                                    1.0f - 2.0f * (q2 * q2 + q3 * q3)) * PhysicsConstants::RAD_TO_DEG;
 
-        // 8. Track loop frequency
+        // 9. Seguimiento de frecuencia de ejecución del lazo
         float instant_freq = 1.0f / dt;
         s_loop_freq_hz = (s_loop_freq_hz * 0.95f) + (instant_freq * 0.05f);
 
-        // 9. Prepare and emit telemetry packet to Core 0 (Lock-Free Queue Overwrite)
+        // 10. Preparar y emitir paquete de telemetría al Núcleo 0 (Sobrescritura sin bloqueo)
         if (g_telemetry_queue != nullptr) {
             protocol::PayloadTelemetry payload{};
             payload.timestamp_us      = static_cast<uint32_t>(now_us);
