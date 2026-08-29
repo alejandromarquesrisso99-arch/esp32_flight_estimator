@@ -1,7 +1,7 @@
 # Estimador de Actitud Aeroespacial de Alta Integridad V2 (ESP32 Dual-Core)
 
 [![Integración Continua](https://github.com/alejandromarquesrisso99-arch/esp32_flight_estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/alejandromarquesrisso99-arch/esp32_flight_estimator/actions)
-[![Lenguaje](https://img.shields.io/badge/Lenguaje-C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Lenguaje](https://img.shields.io/badge/Lenguaje-C%2B%2B17%20%2F%20C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Plataforma](https://img.shields.io/badge/Plataforma-ESP32%20Dual--Core%20240MHz-red.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![Estándar](https://img.shields.io/badge/Est%C3%A1ndar-DO--178C%20%2F%20MISRA%20Compliant-brightgreen.svg)](https://www.rtca.org/)
 
