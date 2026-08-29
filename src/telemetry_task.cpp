@@ -15,12 +15,9 @@ namespace flight {
 
 static constexpr size_t TELEMETRY_STACK_SZ = 8192;
 
-// Instancias estáticas de transporte físico (Política Zero-Heap)
+// Instancias estáticas de transporte físico (Dual Simultáneo: UART + Wi-Fi UDP)
 static UartTransport    s_uart_transport;
 static WifiUdpTransport s_wifi_transport;
-
-// Por defecto en la rama Wi-Fi activamos el transporte Wi-Fi SoftAP
-static ITelemetryTransport* s_active_transport = &s_wifi_transport;
 
 // Búferes de asignación estática de FreeRTOS (Política Zero-Heap)
 static StackType_t   s_telemetry_stack[TELEMETRY_STACK_SZ];
@@ -52,9 +49,9 @@ enum class RxState {
 };
 
 static void transport_send_raw(const void* data, size_t length) {
-    if (s_active_transport != nullptr) {
-        s_active_transport->send(data, length);
-    }
+    // Emisión simultánea en ambos canales físicos para soporte universal transparente
+    s_uart_transport.send(data, length);
+    s_wifi_transport.send(data, length);
 }
 
 static void send_ack_nack(protocol::MsgId ref_msg, protocol::AckStatus status) {
@@ -154,97 +151,108 @@ static void handle_incoming_command(uint8_t msg_id, uint8_t len, const uint8_t* 
     }
 }
 
-static void process_incoming_stream() {
-    if (s_active_transport == nullptr) return;
+struct FrameParser {
+    RxState state = RxState::WAIT_PREAMBLE_0;
+    uint8_t msg_id = 0;
+    uint8_t len = 0;
+    uint8_t payload[128];
+    uint8_t payload_idx = 0;
+    uint8_t chk_low = 0;
 
-    static RxState rx_state = RxState::WAIT_PREAMBLE_0;
-    static uint8_t rx_msg_id = 0;
-    static uint8_t rx_len = 0;
-    static uint8_t rx_payload[128];
-    static uint8_t rx_payload_idx = 0;
-    static uint8_t rx_chk_low = 0;
-
-    static uint8_t rx_buf[128];
-    size_t bytes_read = s_active_transport->receive(rx_buf, sizeof(rx_buf));
-
-    for (size_t i = 0; i < bytes_read; ++i) {
-        uint8_t byte = rx_buf[i];
-
-        switch (rx_state) {
+    void process_byte(uint8_t byte) {
+        switch (state) {
             case RxState::WAIT_PREAMBLE_0:
                 if (byte == protocol::PREAMBLE_0) {
-                    rx_state = RxState::WAIT_PREAMBLE_1;
+                    state = RxState::WAIT_PREAMBLE_1;
                 }
                 break;
 
             case RxState::WAIT_PREAMBLE_1:
                 if (byte == protocol::PREAMBLE_1) {
-                    rx_state = RxState::READ_MSG_ID;
+                    state = RxState::READ_MSG_ID;
                 } else if (byte != protocol::PREAMBLE_0) {
-                    rx_state = RxState::WAIT_PREAMBLE_0;
+                    state = RxState::WAIT_PREAMBLE_0;
                 }
                 break;
 
             case RxState::READ_MSG_ID:
-                rx_msg_id = byte;
-                rx_state = RxState::READ_LENGTH;
+                msg_id = byte;
+                state = RxState::READ_LENGTH;
                 break;
 
             case RxState::READ_LENGTH:
-                rx_len = byte;
-                rx_payload_idx = 0;
-                if (rx_len > sizeof(rx_payload)) {
-                    rx_state = RxState::WAIT_PREAMBLE_0;
-                } else if (rx_len == 0) {
-                    rx_state = RxState::READ_CHECKSUM_LOW;
+                len = byte;
+                payload_idx = 0;
+                if (len > sizeof(payload)) {
+                    state = RxState::WAIT_PREAMBLE_0;
+                } else if (len == 0) {
+                    state = RxState::READ_CHECKSUM_LOW;
                 } else {
-                    rx_state = RxState::READ_PAYLOAD;
+                    state = RxState::READ_PAYLOAD;
                 }
                 break;
 
             case RxState::READ_PAYLOAD:
-                rx_payload[rx_payload_idx++] = byte;
-                if (rx_payload_idx >= rx_len) {
-                    rx_state = RxState::READ_CHECKSUM_LOW;
+                payload[payload_idx++] = byte;
+                if (payload_idx >= len) {
+                    state = RxState::READ_CHECKSUM_LOW;
                 }
                 break;
 
             case RxState::READ_CHECKSUM_LOW:
-                rx_chk_low = byte;
-                rx_state = RxState::READ_CHECKSUM_HIGH;
+                chk_low = byte;
+                state = RxState::READ_CHECKSUM_HIGH;
                 break;
 
             case RxState::READ_CHECKSUM_HIGH: {
-                uint16_t received_chk = static_cast<uint16_t>((byte << 8) | rx_chk_low);
-                if (protocol::verify_checksum(rx_msg_id, rx_len, rx_payload, received_chk)) {
-                    handle_incoming_command(rx_msg_id, rx_len, rx_payload);
+                uint16_t received_chk = static_cast<uint16_t>((byte << 8) | chk_low);
+                if (protocol::verify_checksum(msg_id, len, payload, received_chk)) {
+                    handle_incoming_command(msg_id, len, payload);
                 } else {
-                    ESP_LOGE(TAG, "Error de suma de control en MsgId: 0x%02X", rx_msg_id);
-                    send_ack_nack(static_cast<protocol::MsgId>(rx_msg_id), protocol::AckStatus::NACK_CHECKSUM_ERROR);
+                    ESP_LOGE(TAG, "Error de suma de control en MsgId: 0x%02X", msg_id);
+                    send_ack_nack(static_cast<protocol::MsgId>(msg_id), protocol::AckStatus::NACK_CHECKSUM_ERROR);
                 }
-                rx_state = RxState::WAIT_PREAMBLE_0;
+                state = RxState::WAIT_PREAMBLE_0;
                 break;
             }
         }
     }
+};
+
+static FrameParser s_uart_parser;
+static FrameParser s_wifi_parser;
+
+static void process_incoming_stream() {
+    static uint8_t rx_buf[128];
+
+    // 1. Leer comandos desde UART (Cable Serie)
+    size_t uart_bytes = s_uart_transport.receive(rx_buf, sizeof(rx_buf));
+    for (size_t i = 0; i < uart_bytes; ++i) {
+        s_uart_parser.process_byte(rx_buf[i]);
+    }
+
+    // 2. Leer comandos desde Wi-Fi UDP (Inalámbrico)
+    size_t wifi_bytes = s_wifi_transport.receive(rx_buf, sizeof(rx_buf));
+    for (size_t i = 0; i < wifi_bytes; ++i) {
+        s_wifi_parser.process_byte(rx_buf[i]);
+    }
 }
 
 ITelemetryTransport* telemetry_get_active_transport() {
-    return s_active_transport;
+    return &s_wifi_transport;
 }
 
 void telemetry_set_active_transport(ITelemetryTransport* transport) {
-    if (transport != nullptr) {
-        s_active_transport = transport;
-    }
+    // Dual transport siempre activo
 }
 
 void telemetry_task_init() {
-    // 1. Inicializar el transporte activo (UART o Wi-Fi UDP)
-    if (s_active_transport != nullptr) {
-        ESP_LOGI(TAG, "Inicializando transporte de telemetria: %s", s_active_transport->get_name());
-        ESP_ERROR_CHECK(s_active_transport->init());
-    }
+    // 1. Inicializar ambos transportes físicos (UART y Wi-Fi UDP)
+    ESP_LOGI(TAG, "Inicializando transporte UART (115200 baudios)...");
+    ESP_ERROR_CHECK(s_uart_transport.init());
+
+    ESP_LOGI(TAG, "Inicializando transporte Wi-Fi SoftAP UDP...");
+    ESP_ERROR_CHECK(s_wifi_transport.init());
 
     // 2. Crear cola estatica de telemetria (1 elemento, politica de sobrescritura)
     g_telemetry_queue = xQueueCreateStatic(
@@ -268,8 +276,7 @@ void telemetry_task_init() {
     );
     assert(task_handle != nullptr);
 
-    ESP_LOGI(TAG, "Tarea de telemetria inicializada en Nucleo 0 con transporte [%s]", 
-             s_active_transport ? s_active_transport->get_name() : "NONE");
+    ESP_LOGI(TAG, "Tarea de telemetria inicializada en Nucleo 0 con soporte DUAL simultaneo (UART + Wi-Fi UDP)");
 }
 
 void telemetry_task_run(void* pvParameters) {
@@ -277,13 +284,13 @@ void telemetry_task_run(void* pvParameters) {
     const TickType_t heartbeat_period_ticks = pdMS_TO_TICKS(100); // 10 Hz
 
     while (true) {
-        // 1. Procesar trafico entrante del transporte activo
+        // 1. Procesar trafico entrante de ambos transportes
         process_incoming_stream();
 
         // 2. Manejar emision de telemetria segun estado del sistema
         switch (g_system_state) {
             case SystemState::AWAITING_PROFILE: {
-                // Emitir latido de corazon (Heartbeat) a 10 Hz
+                // Emitir latido de corazon (Heartbeat) a 10 Hz en ambos canales
                 TickType_t now = xTaskGetTickCount();
                 if ((now - last_heartbeat_tick) >= heartbeat_period_ticks) {
                     last_heartbeat_tick = now;
