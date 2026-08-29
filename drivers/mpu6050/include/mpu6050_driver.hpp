@@ -2,8 +2,21 @@
 
 #include <cstdint>
 #include <cstddef>
+
+#if __has_include("esp_err.h")
 #include "esp_err.h"
 #include "driver/gpio.h"
+#else
+typedef int esp_err_t;
+typedef int gpio_num_t;
+constexpr gpio_num_t GPIO_NUM_21 = 21;
+constexpr gpio_num_t GPIO_NUM_22 = 22;
+#define ESP_OK 0
+#define ESP_FAIL -1
+#define ESP_ERR_INVALID_ARG -2
+#define ESP_ERR_INVALID_STATE -3
+#endif
+
 #include "flight_profiles.hpp"
 #include "safety_types.hpp"
 

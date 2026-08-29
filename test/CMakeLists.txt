@@ -7,5 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../libs/matrix/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../libs/ekf/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../drivers/mpu6050/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
-add_executable(test_telemetry test_telemetry.cpp)
+add_executable(test_telemetry 
+    test_telemetry.cpp 
+    ../src/fdir_manager.cpp
+)

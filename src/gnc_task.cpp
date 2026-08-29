@@ -3,6 +3,7 @@
 #include "mpu6050_driver.hpp"
 #include "drdy_sync.hpp"
 #include "timer_watchdog.hpp"
+#include "fdir_manager.hpp"
 #include "ekf.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -63,10 +64,11 @@ void gnc_task_run(void* pvParameters) {
             continue;
         }
 
-        // Initialize EKF profile when transition to RUNNING_ESTIMATOR first occurs
+        // Initialize EKF profile and FDIR when transition to RUNNING_ESTIMATOR first occurs
         if (current_profile != g_active_profile) {
             current_profile = g_active_profile;
             s_ekf.setProfile(current_profile);
+            FDIRManager::init(current_profile);
             s_last_loop_us = esp_timer_get_time();
             s_max_wcet_cycles = 0;
 
@@ -78,7 +80,7 @@ void gnc_task_run(void* pvParameters) {
                 timer_watchdog_init(current_profile, s_gnc_task_handle);
                 timer_watchdog_start();
             }
-            ESP_LOGI(TAG, "EKF 7D initialized for profile: %u (%s)", 
+            ESP_LOGI(TAG, "EKF 7D & FDIR initialized for profile: %u (%s)", 
                      static_cast<unsigned>(current_profile),
                      get_profile_config(current_profile)->name);
         }
@@ -88,9 +90,14 @@ void gnc_task_run(void* pvParameters) {
         drivers::InertialScaledData scaled{};
         esp_err_t err = drivers::MPU6050Driver::read_burst_raw(raw);
         if (err != ESP_OK) {
-            g_health_flags |= HEALTH_FLAG_ANOMALY_DETECTED;
+            if (FDIRManager::register_i2c_error(g_health_flags)) {
+                g_system_state = SystemState::HARD_FAULT_LOCK;
+            }
             continue;
         }
+
+        FDIRManager::register_i2c_success();
+        g_health_flags |= HEALTH_FLAG_IMU_OK;
 
         // Scale data and subtract calibrated gyro biases
         drivers::MPU6050Driver::scale_data(raw, scaled);
@@ -108,16 +115,21 @@ void gnc_task_run(void* pvParameters) {
             dt = nominal_dt;
         }
 
-        // 4. Benchmark WCET with hardware CPU cycle counter
+        // 4. FDIR Health & Dynamic bounds checking
+        FDIRManager::process_sample(scaled, dt, g_health_flags);
+
+        // 5. Benchmark WCET with hardware CPU cycle counter
         uint32_t cycle_start = esp_cpu_get_cycle_count();
 
-        // 5. EKF Predict Step: propagate quaternion kinematics and covariance P
+        // 6. EKF Predict Step: propagate quaternion kinematics and covariance P
         Vector3f gyro_vec{scaled.gyro_rads[0], scaled.gyro_rads[1], scaled.gyro_rads[2]};
         s_ekf.predict(gyro_vec, dt);
 
-        // 6. EKF Update Step: accelerometer gravity correction
-        Vector3f accel_vec{scaled.accel_mss[0], scaled.accel_mss[1], scaled.accel_mss[2]};
-        s_ekf.update(accel_vec);
+        // 7. EKF Update Step: gated accelerometer gravity correction
+        if (FDIRManager::should_fuse_accelerometer(scaled, g_health_flags)) {
+            Vector3f accel_vec{scaled.accel_mss[0], scaled.accel_mss[1], scaled.accel_mss[2]};
+            s_ekf.update(accel_vec);
+        }
 
         uint32_t cycle_end = esp_cpu_get_cycle_count();
         uint32_t elapsed_cycles = (cycle_end >= cycle_start) ? (cycle_end - cycle_start) : 0;
