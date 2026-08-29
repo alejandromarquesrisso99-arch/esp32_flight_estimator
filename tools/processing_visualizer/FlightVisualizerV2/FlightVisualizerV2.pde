@@ -399,7 +399,7 @@ void drawVehicleModel() {
       drawSpaceRocketModel();
       break;
     case 4:
-      drawHighGManeuverMissileModel();
+      drawMissileModel();
       break;
     default:
       drawCivilianDroneModel();
@@ -908,169 +908,185 @@ void drawRocketExhaustPlume(float x, float y, float z) {
   popMatrix();
 }
 
-/**
- * Modelo 3D: Misil Aire-Aire Tactico de Alta Maniobra (Perfil 4: MISSILE_HIGH_G)
- * Estilo misil aire-aire supersonico interceptor (AIM-120 AMRAAM / Meteor / AIM-9X / IRIS-T)
- * Fuselaje esbelto y alargado, colores oscuros militares discretos (gris grafito tactico RAM),
- * aletas triangulares en cruz cruciforme delante (canards) y detras (cola), cupula optica de punteria
- * y propulsion supersonica con penacho de llama azul electrico y diamantes de choque.
- */
-void drawHighGManeuverMissileModel() {
-  // 1. Ejes de referencia discretos de trayectoria / proa / estribor
-  strokeWeight(2);
-  stroke(255, 45, 55, 180); line(0, 0, 0, 0, 0, -145); // Eje longitudinal de trayectoria (-Z Processing)
-  stroke(45, 255, 90, 180); line(0, 0, 0, 45, 0, 0);    // Eje transversal (+X Processing)
-  stroke(45, 120, 255, 180); line(0, 0, 0, 0, 45, 0);   // Eje vertical (+Y Processing)
-
-  // 2. Cupula Frontal y Autodirector Aire-Aire (Seeker Nose: Z = -135 a Z = -100)
-  // Sensor infrarrojo / optico frontal
-  fill(16, 20, 25);
-  stroke(45, 52, 62);
-  strokeWeight(1);
-  pushMatrix();
-  translate(0, 0, -125);
-  rotateX(HALF_PI);
-  drawCylinder(0.8f, 3.2f, 18, 20);
-  popMatrix();
-
-  // Lente de zafiro frontal con destello discreto
-  fill(160, 200, 240, 220);
+// ============================================================================
+// 4. MODELO 3D: MISIL TÁCTICO HIGH-G (SUPERSONIC INTERCEPTOR)
+// ============================================================================
+void drawMissileModel() {
   noStroke();
+
+  // --- 1. Domo de Guiado Óptico / Seeker IR Frontal (-Z) ---
+  fill(20, 22, 28);
+  drawConeZ(5.0f, -188, -196, 16);
+  fill(220, 40, 50); // Ventana de sensor infrarrojo
   pushMatrix();
-  translate(0, 0, -133.5f);
-  sphere(1.0f);
+  translate(0, 0, -196);
+  sphere(2.5f);
   popMatrix();
 
-  // Ojiva aerodinamica frontal de baja resistencia (Radomo ceramico grafito)
-  fill(28, 32, 38);
-  stroke(50, 58, 68);
-  strokeWeight(1);
-  pushMatrix();
-  translate(0, 0, -108);
-  rotateX(HALF_PI);
-  drawCylinder(3.2f, 6.0f, 16, 22);
-  popMatrix();
+  // --- 2. Radomo Ogival Supersónico ---
+  fill(38, 44, 54); // Titanio oscuro táctico
+  drawFrustumZ(5.0f, 13.0f, -188, -145, 20, false, false);
 
-  // 3. Seccion Delantera de Guiado y Aletas Delanteras en Cruz (Canards: Z = -100 a Z = -65)
-  fill(36, 40, 48);
-  stroke(55, 62, 72);
-  pushMatrix();
-  translate(0, 0, -85);
-  rotateX(HALF_PI);
-  drawCylinder(6.0f, 6.0f, 30, 22);
-  popMatrix();
+  // --- 3. Sección de Guiado y Computador de Tiro ---
+  fill(42, 48, 60);
+  drawFrustumZ(13.0f, 13.0f, -145, -90, 20, false, false);
 
-  // Banda tactica amarilla de ojiva de combate (High Explosive)
-  fill(175, 140, 25);
-  noStroke();
-  pushMatrix();
-  translate(0, 0, -96);
-  rotateX(HALF_PI);
-  drawCylinder(6.15f, 6.15f, 1.5f, 22);
-  popMatrix();
+  // --- 4. 4 Canards Delanteros Cruciformes de Control High-G ---
+  float canardZ1 = -125.0f;
+  float canardZ2 = -95.0f;
+  float canardSpan = 22.0f;
+  float canardThick = 1.8f;
 
-  // 4 ALETAS DELANTERAS EN CRUZ CRUCIFORME (Canards de Control de Guiado Rapido en Z = -85)
-  drawTriangularAeroFin(0, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
-  drawTriangularAeroFin(HALF_PI, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
-  drawTriangularAeroFin(PI, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
-  drawTriangularAeroFin(PI + HALF_PI, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
+  drawMissileCanard( canardSpan, canardZ1, canardZ2, canardThick, 0);
+  drawMissileCanard(-canardSpan, canardZ1, canardZ2, canardThick, 0);
+  drawMissileCanard( canardSpan, canardZ1, canardZ2, canardThick, HALF_PI);
+  drawMissileCanard(-canardSpan, canardZ1, canardZ2, canardThick, HALF_PI);
 
-  // 4. Fuselaje Alargado Principal / Motor Cohete Solido (Solid Rocket Motor: Z = -65 a Z = +55)
-  fill(32, 36, 42);
-  stroke(50, 58, 68);
-  strokeWeight(1);
-  pushMatrix();
-  translate(0, 0, -5);
-  rotateX(HALF_PI);
-  drawCylinder(6.0f, 6.0f, 120, 22);
-  popMatrix();
+  // --- 5. Fuselaje Principal / Motor Cohete ---
+  fill(36, 42, 52);
+  drawFrustumZ(13.0f, 13.0f, -90, 115, 20, false, false);
 
-  // Banda tactica marron de motor cohete (Rocket Motor)
-  fill(125, 68, 25);
-  noStroke();
-  pushMatrix();
-  translate(0, 0, -58);
-  rotateX(HALF_PI);
-  drawCylinder(6.15f, 6.15f, 1.5f, 22);
-  popMatrix();
+  // Bandas tácticas de advertencia High-G (Amarillo / Negro)
+  fill(240, 185, 30); // Amarillo militar
+  drawFrustumZ(13.2f, 13.2f, -15, 5, 20, false, false);
+  fill(20, 24, 30);
+  drawFrustumZ(13.3f, 13.3f, -5, 0, 20, false, false);
 
-  // Conductos longitudinales de cableado tactico dorsales y ventrales
-  fill(22, 26, 32);
-  pushMatrix(); translate(0, -6.15f, -5); box(1.3f, 0.6f, 115); popMatrix();
-  pushMatrix(); translate(0, 6.15f, -5);  box(1.3f, 0.6f, 115); popMatrix();
+  // --- 6. Falda Trasera y Tobera de Alta Velocidad ---
+  fill(48, 54, 66);
+  drawFrustumZ(13.0f, 10.0f, 115, 130, 20, false, false);
+  fill(60, 68, 82);
+  drawFrustumZ(7.0f, 12.5f, 130, 150, 20, false, true);
 
-  // 5. Seccion de Cola y 4 ALETAS TRASERAS EN CRUZ (Aft Tail Fins: Z = +55 a Z = +78)
-  fill(26, 30, 36);
-  stroke(46, 54, 64);
-  pushMatrix();
-  translate(0, 0, 66);
-  rotateX(HALF_PI);
-  drawCylinder(6.0f, 5.5f, 22, 22);
-  popMatrix();
+  // Penacho de escape supersónico con ondas de choque (Shock Diamond)
+  fill(70, 180, 255, 210); // Plasma cian supersónico
+  drawConeZ(8.0f, 150, 180, 16);
+  fill(180, 80, 255, 180); // Núcleo violeta
+  drawConeZ(5.0f, 150, 168, 16);
 
-  // 4 ALETAS TRASERAS EN CRUZ CRUCIFORME (Aletas de Estabilizacion y Maniobra en Z = +65)
-  drawTriangularAeroFin(0, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
-  drawTriangularAeroFin(HALF_PI, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
-  drawTriangularAeroFin(PI, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
-  drawTriangularAeroFin(PI + HALF_PI, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
+  // --- 7. 4 Grandes Aletas Traseras en Delta Supersónico ---
+  float aftFinZ1 = 55.0f;
+  float aftFinZ2 = 125.0f;
+  float aftFinSpan = 38.0f;
+  float aftFinThick = 2.0f;
 
-  // 6. Tobera de Propulsion de Popa (Z = +77 a Z = +85)
-  pushMatrix();
-  translate(0, 0, 81);
-  rotateX(HALF_PI);
-  fill(38, 36, 35);
-  stroke(22, 20, 18);
-  strokeWeight(0.8f);
-  drawCylinder(3.6f, 4.8f, 7.0f, 16);
-
-  // Nucleo incandescente de plasma de la tobera
-  fill(0, 200, 255);
-  noStroke();
-  pushMatrix();
-  translate(0, -1.8f, 0);
-  drawCylinder(3.0f, 2.2f, 2.5f, 14);
-  popMatrix();
-  popMatrix();
-
-  // 7. Llama y Penacho de Propulsion Azul Electrico Supersonico
-  drawMissileExhaustPlume(0, 0, 85);
+  drawMissileAftFin( aftFinSpan, aftFinZ1, aftFinZ2, aftFinThick, 0);
+  drawMissileAftFin(-aftFinSpan, aftFinZ1, aftFinZ2, aftFinThick, 0);
+  drawMissileAftFin( aftFinSpan, aftFinZ1, aftFinZ2, aftFinThick, HALF_PI);
+  drawMissileAftFin(-aftFinSpan, aftFinZ1, aftFinZ2, aftFinThick, HALF_PI);
 }
 
-void drawMissileExhaustPlume(float x, float y, float z) {
-  float flicker = sin(frameCount * 0.65f) * 3.5f + random(-1.5f, 1.5f);
-  float plumeLen = 60.0f + flicker;
-
+void drawMissileCanard(float span, float zStart, float zEnd, float thick, float rotZ) {
   pushMatrix();
-  translate(x, y, z);
+  rotateZ(rotZ);
+  fill(240, 185, 30); // Aletas canard en amarillo táctico
+  
+  float rBody = 13.0f;
+  float rTip = rBody + abs(span);
+  float sign = (span >= 0) ? 1.0f : -1.0f;
 
-  // Llama exterior conica azul electrico / cian translucida
-  noStroke();
-  fill(0, 140, 255, 160);
-  pushMatrix();
-  translate(0, 0, plumeLen * 0.45f);
-  rotateX(HALF_PI);
-  drawCylinder(4.2f, 0.4f, plumeLen, 14);
+  beginShape(TRIANGLE_STRIP);
+  vertex(sign * rBody, -thick/2, zStart);
+  vertex(sign * rTip,  -thick/2, zStart + (zEnd - zStart)*0.6f);
+  vertex(sign * rBody, -thick/2, zEnd);
+  vertex(sign * rTip,  -thick/2, zEnd);
+  endShape();
+
+  beginShape(TRIANGLE_STRIP);
+  vertex(sign * rBody,  thick/2, zStart);
+  vertex(sign * rTip,   thick/2, zEnd - (zEnd - zStart)*0.4f);
+  vertex(sign * rBody,  thick/2, zEnd);
+  vertex(sign * rTip,   thick/2, zEnd);
+  endShape();
   popMatrix();
+}
 
-  // Nucleo hipersonico blanco-azulado de alta temperatura
-  fill(215, 242, 255, 230);
+void drawMissileAftFin(float span, float zStart, float zEnd, float thick, float rotZ) {
   pushMatrix();
-  translate(0, 0, plumeLen * 0.25f);
-  rotateX(HALF_PI);
-  drawCylinder(2.4f, 0.3f, plumeLen * 0.5f, 12);
-  popMatrix();
+  rotateZ(rotZ);
+  fill(30, 35, 45); // Aletas principales en grafito militar
+  
+  float rBody = 13.0f;
+  float rTip = rBody + abs(span);
+  float sign = (span >= 0) ? 1.0f : -1.0f;
 
-  // Diamantes de choque supersonicos en cian brillante
-  fill(0, 255, 240, 230);
-  for (int d = 1; d <= 3; d++) {
-    pushMatrix();
-    translate(0, 0, d * 11.0f + flicker * 0.2f);
-    rotateX(HALF_PI);
-    drawCylinder(1.8f - d * 0.4f, 0.2f, 5.0f, 8);
-    popMatrix();
+  beginShape(TRIANGLE_STRIP);
+  vertex(sign * rBody, -thick/2, zStart);
+  vertex(sign * rTip,  -thick/2, zEnd - 15);
+  vertex(sign * rBody, -thick/2, zEnd);
+  vertex(sign * rTip,  -thick/2, zEnd);
+  endShape();
+
+  beginShape(TRIANGLE_STRIP);
+  vertex(sign * rBody,  thick/2, zStart);
+  vertex(sign * rTip,   thick/2, zEnd - 15);
+  vertex(sign * rBody,  thick/2, zEnd);
+  vertex(sign * rTip,   thick/2, zEnd);
+  endShape();
+
+  // Borde biselado en amarillo neón
+  fill(240, 185, 30);
+  beginShape(QUADS);
+  vertex(sign * rBody, -thick/2, zStart);
+  vertex(sign * rTip,  -thick/2, zEnd - 15);
+  vertex(sign * rTip,   thick/2, zEnd - 15);
+  vertex(sign * rBody,  thick/2, zStart);
+  endShape();
+
+  popMatrix();
+}
+
+void drawFrustumZ(float r1, float r2, float z1, float z2, int sides, boolean cap1, boolean cap2) {
+  float angleStep = TWO_PI / sides;
+
+  beginShape(QUAD_STRIP);
+  for (int i = 0; i <= sides; i++) {
+    float a = i * angleStep;
+    float ca = cos(a);
+    float sa = sin(a);
+    vertex(ca * r1, sa * r1, z1);
+    vertex(ca * r2, sa * r2, z2);
+  }
+  endShape();
+
+  if (cap1) {
+    beginShape(TRIANGLE_FAN);
+    vertex(0, 0, z1);
+    for (int i = 0; i <= sides; i++) {
+      float a = i * angleStep;
+      vertex(cos(a) * r1, sin(a) * r1, z1);
+    }
+    endShape();
   }
 
-  popMatrix();
+  if (cap2) {
+    beginShape(TRIANGLE_FAN);
+    vertex(0, 0, z2);
+    for (int i = 0; i <= sides; i++) {
+      float a = i * angleStep;
+      vertex(cos(a) * r2, sin(a) * r2, z2);
+    }
+    endShape();
+  }
+}
+
+void drawConeZ(float r, float zBase, float zTip, int sides) {
+  float angleStep = TWO_PI / sides;
+  beginShape(TRIANGLE_FAN);
+  vertex(0, 0, zTip);
+  for (int i = 0; i <= sides; i++) {
+    float a = i * angleStep;
+    vertex(cos(a) * r, sin(a) * r, zBase);
+  }
+  endShape();
+
+  beginShape(TRIANGLE_FAN);
+  vertex(0, 0, zBase);
+  for (int i = 0; i <= sides; i++) {
+    float a = i * angleStep;
+    vertex(cos(a) * r, sin(a) * r, zBase);
+  }
+  endShape();
 }
 
 // -------------------------------------------------------------
