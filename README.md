@@ -10,7 +10,7 @@ Sistema de referencia de actitud y rumbo (AHRS) de tiempo real duro basado en un
 
 ---
 
-## 🚀 Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ```mermaid
 flowchart TD
@@ -42,7 +42,7 @@ flowchart TD
 
 ---
 
-## 🌟 Aspectos Técnicos Destacados
+## Aspectos Técnicos Destacados
 
 1. **Aislamiento Multinúcleo Estricto (Asymmetric Dual-Core Architecture):**
    * **Núcleo 1 (Dominio Crítico, Prioridad 24):** Dedicado exclusivamente a la adquisición inercial del MPU6050, supervisión FDIR, temporizadores GPTimer y álgebra matricial del EKF. Jamás se bloquea por la velocidad de la red o del enlace serie.
@@ -67,7 +67,7 @@ flowchart TD
 
 ---
 
-## 🎯 Perfiles de Vuelo Preconfigurados
+## Perfiles de Vuelo Preconfigurados
 
 | ID | Perfil | Frecuencia | Rango Giro | Rango Acel | DLPF | Umbral G-Gating | Aplicación |
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -78,7 +78,7 @@ flowchart TD
 
 ---
 
-## 📦 Protocolo Binario de Telemetría (Fletcher-16)
+## Protocolo Binario de Telemetría (Fletcher-16)
 
 Todas las tramas utilizan alineación Little-Endian empaquetada (`#pragma pack(push, 1)`):
 
@@ -106,7 +106,7 @@ $$\underbrace{\text{Preámbulo } [0xAA, 0x55] (2\text{B}) + \text{IdMensaje } (1
 
 ---
 
-## ⚡ Rendimiento y Medición de WCET
+## Rendimiento y Medición de WCET
 
 Medido en ciclo a ciclo en el Núcleo 1 del ESP32 a 240 MHz:
 
@@ -117,7 +117,7 @@ Medido en ciclo a ciclo en el Núcleo 1 del ESP32 a 240 MHz:
 
 ---
 
-## 🛠️ Instrucciones de Compilación, Grabación y Uso
+## Instrucciones de Compilación, Grabación y Uso
 
 ### Requisitos Previos
 * ESP-IDF v5.3+ instalado.
