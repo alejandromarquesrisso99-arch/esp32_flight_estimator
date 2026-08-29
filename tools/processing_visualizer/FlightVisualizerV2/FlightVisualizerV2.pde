@@ -56,6 +56,7 @@ float camRotY = DEFAULT_CAM_ROT_Y;
 float camPanX = 0.0f;
 float camPanY = 0.0f;
 float camZoom = 1.0f;
+long lastMouseClickMs = 0;
 
 // Variables de estado de telemetria
 long lastPacketTimeMs = 0;
@@ -1654,8 +1655,9 @@ void mousePressed() {
       return;
     }
 
-    // Doble clic dentro de la ventana 3D para centrar y resetear la camara
-    if (mouseEvent != null && mouseEvent.getClickCount() == 2) {
+    // Doble clic dentro de la ventana 3D para centrar y resetear la camara (intervalo < 300 ms)
+    long now = millis();
+    if (now - lastMouseClickMs < 300) {
       if (mouseX >= 30 && mouseX <= 570 && mouseY >= 35 && mouseY <= 705) {
         camRotX = DEFAULT_CAM_ROT_X;
         camRotY = DEFAULT_CAM_ROT_Y;
@@ -1664,6 +1666,7 @@ void mousePressed() {
         camZoom = 1.0f;
       }
     }
+    lastMouseClickMs = now;
   }
 }
 
