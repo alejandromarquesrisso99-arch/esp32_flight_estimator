@@ -725,11 +725,11 @@ void drawSpaceRocketModel() {
   drawCylinder(13.2f, 13.2f, 20, 24);
   popMatrix();
 
-  // 4 Aletas de Rejilla de Titanio (Grid Fins) para guiado aerodinamico
-  drawRocketGridFin(0, 13.2f, -32);            // Superior (+Y)
-  drawRocketGridFin(HALF_PI, 13.2f, -32);      // Estribor (+X)
-  drawRocketGridFin(PI, 13.2f, -32);           // Inferior (-Y)
-  drawRocketGridFin(PI + HALF_PI, 13.2f, -32); // Babor (-X)
+  // 4 Aletas de Guiado Triangulares (Delta Canards) en el anillo interetapa
+  drawTriangularAeroFin(0, 13.2f, -30, 16.0f, 13.0f, 12.0f, 1.4f, color(45, 52, 62), color(70, 80, 95));
+  drawTriangularAeroFin(HALF_PI, 13.2f, -30, 16.0f, 13.0f, 12.0f, 1.4f, color(45, 52, 62), color(70, 80, 95));
+  drawTriangularAeroFin(PI, 13.2f, -30, 16.0f, 13.0f, 12.0f, 1.4f, color(45, 52, 62), color(70, 80, 95));
+  drawTriangularAeroFin(PI + HALF_PI, 13.2f, -30, 16.0f, 13.0f, 12.0f, 1.4f, color(45, 52, 62), color(70, 80, 95));
 
   // 5. Primera Etapa / Booster Principal (Z = -20 a Z = +70)
   fill(240, 244, 250);
@@ -758,11 +758,11 @@ void drawSpaceRocketModel() {
   pushMatrix(); translate(0, 0, -5); rotateX(HALF_PI); drawCylinder(13.3f, 13.3f, 1.2f, 24); popMatrix();
   pushMatrix(); translate(0, 0, 45); rotateX(HALF_PI); drawCylinder(13.3f, 13.3f, 1.2f, 24); popMatrix();
 
-  // 4 Carenados estabilizadores de base / Patas replegadas
-  drawRocketBaseAeroFin(0, 13.0f, 62);
-  drawRocketBaseAeroFin(HALF_PI, 13.0f, 62);
-  drawRocketBaseAeroFin(PI, 13.0f, 62);
-  drawRocketBaseAeroFin(PI + HALF_PI, 13.0f, 62);
+  // 4 Grandes Aletas Estabilizadoras Delta Triangulares en la base
+  drawTriangularAeroFin(0, 13.0f, 52, 28.0f, 18.0f, 20.0f, 2.2f, color(240, 244, 250), color(175, 185, 200));
+  drawTriangularAeroFin(HALF_PI, 13.0f, 52, 28.0f, 18.0f, 20.0f, 2.2f, color(240, 244, 250), color(175, 185, 200));
+  drawTriangularAeroFin(PI, 13.0f, 52, 28.0f, 18.0f, 20.0f, 2.2f, color(240, 244, 250), color(175, 185, 200));
+  drawTriangularAeroFin(PI + HALF_PI, 13.0f, 52, 28.0f, 18.0f, 20.0f, 2.2f, color(240, 244, 250), color(175, 185, 200));
 
   // 6. Base de Empuje y Racimo de Toberas (Thrust Structure & Nozzles: Z = +70 a Z = +85)
   // Escudo termico de popa
@@ -793,51 +793,59 @@ void drawSpaceRocketModel() {
 // SUBCOMPONENTES DEL COHETE ESPACIAL
 // -------------------------------------------------------------
 
-void drawRocketGridFin(float angle, float radius, float z) {
+void drawTriangularAeroFin(float angle, float radius, float z, float rootLen, float span, float sweepZ, float thick, color cFill, color cStroke) {
   pushMatrix();
   translate(0, 0, z);
   rotateZ(angle);
   translate(0, -radius, 0);
 
-  // Bisagra y actuador de titanio
-  fill(70, 78, 88);
-  stroke(40, 46, 54);
+  fill(cFill);
+  stroke(cStroke);
   strokeWeight(1);
-  pushMatrix();
-  translate(0, -2, 0);
-  box(4, 4, 5);
-  popMatrix();
 
-  // Estructura de aleta de rejilla desplegada
-  fill(110, 120, 132);
-  stroke(55, 62, 70);
-  pushMatrix();
-  translate(0, -9, 0);
-  box(1.5f, 12, 14); // Marco perimetral
-  
-  // Rejilla interna aerodinamica
-  fill(85, 95, 108);
-  noStroke();
-  box(0.6f, 10, 12);
-  popMatrix();
+  float halfThick = thick * 0.5f;
+  float frontZ = -rootLen * 0.5f;
+  float rearZ  = rootLen * 0.5f;
+  float tipY   = -span;
+  float tipZ   = frontZ + sweepZ;
 
-  popMatrix();
-}
+  // Cara lateral izquierda (+X)
+  beginShape();
+  vertex(halfThick, 0, frontZ);
+  vertex(halfThick, tipY, tipZ);
+  vertex(halfThick, 0, rearZ);
+  endShape(CLOSE);
 
-void drawRocketBaseAeroFin(float angle, float radius, float z) {
-  pushMatrix();
-  translate(0, 0, z);
-  rotateZ(angle);
-  translate(0, -radius, 0);
+  // Cara lateral derecha (-X)
+  beginShape();
+  vertex(-halfThick, 0, frontZ);
+  vertex(-halfThick, 0, rearZ);
+  vertex(-halfThick, tipY, tipZ);
+  endShape(CLOSE);
 
-  // Carenado aerodinamico de base
-  fill(235, 240, 246);
-  stroke(165, 175, 190);
-  strokeWeight(1);
-  pushMatrix();
-  translate(0, -3, 0);
-  box(2.0f, 6, 22);
-  popMatrix();
+  // Borde de ataque (Leading Edge con perfil afilado)
+  beginShape();
+  vertex(-halfThick, 0, frontZ);
+  vertex(halfThick, 0, frontZ);
+  vertex(halfThick, tipY, tipZ);
+  vertex(-halfThick, tipY, tipZ);
+  endShape(CLOSE);
+
+  // Borde de fuga (Trailing Edge)
+  beginShape();
+  vertex(halfThick, tipY, tipZ);
+  vertex(halfThick, 0, rearZ);
+  vertex(-halfThick, 0, rearZ);
+  vertex(-halfThick, tipY, tipZ);
+  endShape(CLOSE);
+
+  // Borde de encastre (Root)
+  beginShape();
+  vertex(-halfThick, 0, frontZ);
+  vertex(-halfThick, 0, rearZ);
+  vertex(halfThick, 0, rearZ);
+  vertex(halfThick, 0, frontZ);
+  endShape(CLOSE);
 
   popMatrix();
 }
