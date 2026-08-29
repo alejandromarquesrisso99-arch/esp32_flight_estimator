@@ -393,8 +393,7 @@ void drawVehicleModel() {
       drawCivilianDroneModel();
       break;
     case 2:
-      // Perfil 2: Dron acrobático / FPV (próximo paso)
-      drawFlatBoardModel();
+      drawFpvRacingDroneModel();
       break;
     case 3:
       // Perfil 3: Cohete de lanzamiento
@@ -519,9 +518,257 @@ void drawCivilianDroneModel() {
   drawLandingGearAndNavLed(70, 0, 60, color(255, 200, 40));
 }
 
+/**
+ * Modelo 3D: Dron Acrobatico FPV Racer (Perfil 2: DRONE_ACRO)
+ * Diseno agresivo de competicion: chasis True-X de fibra de carbono vista 3K, camara micro FPV
+ * con 35° de inclinacion de carrera, antena VTX pagoda trasera, motores high-KV y helices tripala ahumadas.
+ */
+void drawFpvRacingDroneModel() {
+  // 1. Ejes de referencia discretos de proa / estribor
+  strokeWeight(2);
+  stroke(255, 45, 55, 180); line(0, 0, 0, 0, 0, -85);  // Proa (-Z Processing)
+  stroke(45, 255, 90, 180); line(0, 0, 0, 85, 0, 0);   // Estribor (+X Processing)
+  stroke(45, 120, 255, 180); line(0, 0, 0, 0, 45, 0);  // Abajo (+Y Processing)
+
+  // 2. Chasis Central de Competicion (True-X Compact Frame)
+  // Placa inferior de fibra de carbono (Bottom Plate)
+  fill(20, 23, 28);
+  stroke(48, 56, 66);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 3, 0);
+  box(24, 3, 66);
+  popMatrix();
+
+  // Separadores estructurales de aluminio anodizado (Standoffs de titanio)
+  fill(60, 68, 78);
+  noStroke();
+  pushMatrix(); translate(-9, -2, -20); drawCylinder(2, 2, 7, 10); popMatrix();
+  pushMatrix(); translate(9, -2, -20);  drawCylinder(2, 2, 7, 10); popMatrix();
+  pushMatrix(); translate(-9, -2, 20);  drawCylinder(2, 2, 7, 10); popMatrix();
+  pushMatrix(); translate(9, -2, 20);   drawCylinder(2, 2, 7, 10); popMatrix();
+
+  // Placa superior de carbono (Top Plate)
+  fill(24, 27, 32);
+  stroke(52, 60, 70);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, -6, 0);
+  box(22, 2.5f, 60);
+  popMatrix();
+
+  // Canopy aerodinamico TPU en grafito mate stealth
+  fill(32, 36, 44);
+  stroke(45, 52, 62);
+  pushMatrix();
+  translate(0, -11, -8);
+  box(18, 8, 32);
+  popMatrix();
+
+  // Bateria LiPo 6S de competicion montada en el lomo trasero
+  fill(16, 18, 22);
+  stroke(40, 46, 54);
+  pushMatrix();
+  translate(0, -12, 12);
+  box(18, 9, 28);
+  // Correa de velcro / kevlar de sujeccion
+  fill(36, 40, 48);
+  noStroke();
+  translate(0, 0, 0);
+  box(19, 10, 8);
+  // Conector de potencia XT60 amarillo discreto atras
+  fill(210, 160, 20);
+  translate(0, 2, 16);
+  box(6, 4, 4);
+  popMatrix();
+
+  // 3. Camara Micro FPV Agresiva con inclinacion de carrera (35° Pitch Up)
+  pushMatrix();
+  translate(0, -8, -28);
+  
+  // Placas laterales de carbono protectoras de la lente
+  fill(20, 22, 26);
+  stroke(42, 48, 56);
+  strokeWeight(1);
+  pushMatrix(); translate(-9, 0, 0); box(1.5f, 12, 16); popMatrix();
+  pushMatrix(); translate(9, 0, 0);  box(1.5f, 12, 16); popMatrix();
+
+  // Modulo de camara inclinado a 35 grados hacia arriba
+  pushMatrix();
+  rotateX(radians(-35)); // Inclinacion agresiva de carrera
+
+  // Cuerpo de la camara FPV
+  fill(26, 30, 36);
+  stroke(50, 58, 68);
+  box(14, 12, 14);
+
+  // Bisel de la lente FPV
+  fill(18, 20, 24);
+  pushMatrix();
+  translate(0, 0, -8);
+  rotateX(HALF_PI);
+  drawCylinder(4.5f, 4.5f, 4, 14);
+  
+  // Optica gran angular con reflejo carmin oscuro
+  fill(190, 30, 45);
+  noStroke();
+  pushMatrix();
+  translate(0, -2.1f, 0);
+  drawCylinder(3.5f, 3.5f, 0.5f, 14);
+  popMatrix();
+  popMatrix();
+
+  popMatrix();
+  popMatrix();
+
+  // 4. Antena VTX Pagoda Trasera (Inclinada 45° hacia atras)
+  pushMatrix();
+  translate(0, -10, 28);
+  rotateX(radians(45));
+  // Vastago
+  fill(20, 22, 25);
+  noStroke();
+  drawCylinder(1.5f, 1.5f, 16, 8);
+  // Cabeza Pagoda
+  fill(15, 17, 20);
+  pushMatrix();
+  translate(0, -9, 0);
+  drawCylinder(4.5f, 4.5f, 5, 14);
+  popMatrix();
+  popMatrix();
+
+  // 5. Cuatro Brazos de Carbono en True-X
+  drawCarbonArm(-10, 2, -14, -62, 0, -45, 8, 6);
+  drawCarbonArm(10, 2, -14, 62, 0, -45, 8, 6);
+  drawCarbonArm(-10, 2, 14, -62, 0, 45, 8, 6);
+  drawCarbonArm(10, 2, 14, 62, 0, 45, 8, 6);
+
+  // 6. Tiras LED de Competicion (Bajo los brazos)
+  // Delanteras: Cian discreto
+  fill(0, 190, 220);
+  noStroke();
+  pushMatrix(); translate(-36, 4, -30); box(12, 1, 3); popMatrix();
+  pushMatrix(); translate(36, 4, -30);  box(12, 1, 3); popMatrix();
+  // Traseras: Rojo carmin de carrera
+  fill(220, 30, 40);
+  pushMatrix(); translate(-36, 4, 30); box(12, 1, 3); popMatrix();
+  pushMatrix(); translate(36, 4, 30);  box(12, 1, 3); popMatrix();
+
+  // 7. Motores Brushless Race y Helices Tripala de Alta Velocidad
+  // Delantero Izquierdo (FL) - CW
+  drawTriBladePropeller(-62, -2, -45, propAngle, true);
+  // Delantero Derecho (FR) - CCW
+  drawTriBladePropeller(62, -2, -45, propAngle, false);
+  // Trasero Izquierdo (RL) - CCW
+  drawTriBladePropeller(-62, -2, 45, propAngle, false);
+  // Trasero Derecho (RR) - CW
+  drawTriBladePropeller(62, -2, 45, propAngle, true);
+}
+
 // -------------------------------------------------------------
 // SUBCOMPONENTES DEL MODELO 3D
 // -------------------------------------------------------------
+
+void drawCarbonArm(float x1, float y1, float z1, float x2, float y2, float z2, float w, float h) {
+  pushMatrix();
+  float mx = (x1 + x2) * 0.5f;
+  float my = (y1 + y2) * 0.5f;
+  float mz = (z1 + z2) * 0.5f;
+  translate(mx, my, mz);
+
+  float dx = x2 - x1;
+  float dy = y2 - y1;
+  float dz = z2 - z1;
+  float len = sqrt(dx*dx + dy*dy + dz*dz);
+
+  float yaw = atan2(dx, dz);
+  float pitch = -atan2(dy, sqrt(dx*dx + dz*dz));
+
+  rotateY(yaw);
+  rotateX(pitch);
+
+  // Brazo de carbono 3K mate
+  fill(22, 25, 30);
+  stroke(48, 54, 62);
+  strokeWeight(1);
+  box(w, h, len);
+
+  // Chaflan superior
+  fill(38, 44, 52);
+  noStroke();
+  pushMatrix();
+  translate(0, -h * 0.4f, 0);
+  box(w * 0.7f, 1.0f, len * 0.95f);
+  popMatrix();
+
+  popMatrix();
+}
+
+void drawTriBladePropeller(float x, float y, float z, float angle, boolean isCW) {
+  pushMatrix();
+  translate(x, y, z);
+
+  // Carcasa del motor Brushless Race
+  fill(36, 40, 48);
+  stroke(20, 24, 30);
+  strokeWeight(1);
+  drawCylinder(7.5f, 7.5f, 9, 16);
+
+  // Campana rotorica en titanio oscuro
+  fill(65, 72, 82);
+  pushMatrix();
+  translate(0, -4.5f, 0);
+  drawCylinder(8, 8, 4, 16);
+  popMatrix();
+
+  // Helice Tripala en giro
+  pushMatrix();
+  translate(0, -7.5f, 0);
+  rotateY(isCW ? angle * 1.5f : -angle * 1.5f);
+
+  // Buje central
+  fill(25, 28, 34);
+  noStroke();
+  drawCylinder(3.2f, 3.2f, 3.5f, 12);
+
+  // 3 Palas espaciadas a 120 grados
+  for (int b = 0; b < 3; b++) {
+    pushMatrix();
+    rotateY(b * TWO_PI / 3.0f);
+
+    // Cuerpo de la pala ahumada
+    fill(24, 28, 34, 225);
+    stroke(15, 18, 22);
+    strokeWeight(0.8f);
+    pushMatrix();
+    translate(0, 0, 16);
+    rotateX(radians(9));
+    box(5.5f, 1.2f, 22);
+    popMatrix();
+
+    // Punta en carmin oscuro discreto
+    fill(190, 28, 38);
+    noStroke();
+    pushMatrix();
+    translate(0, 0, 30);
+    rotateX(radians(9));
+    box(4.8f, 1.1f, 7);
+    popMatrix();
+
+    popMatrix();
+  }
+  popMatrix();
+
+  // Halo translucido de disco de rotor en alta velocidad
+  noStroke();
+  fill(30, 40, 55, 28);
+  pushMatrix();
+  translate(0, -7.5f, 0);
+  drawCylinder(34, 34, 1, 24);
+  popMatrix();
+
+  popMatrix();
+}
 
 void drawSleekArm(float x1, float y1, float z1, float x2, float y2, float z2, float w, float h) {
   pushMatrix();
@@ -954,11 +1201,11 @@ void mousePressed() {
     if (mouseX >= 80 && mouseX <= 520 && mouseY >= 380 && mouseY <= 620) selectProfile(3);
     if (mouseX >= 580 && mouseX <= 1020 && mouseY >= 380 && mouseY <= 620) selectProfile(4);
   } else if (currentUiState == UI_STATE_RUNNING_ESTIMATOR) {
-    // Comprobar boton de reinicio
-    if (mouseX >= 600 && mouseX <= 1040 && mouseY >= 630 && mouseY <= 665) {
+    // Comprobar clic en el boton de reinicio (X: 620-1070, Y: 655-690)
+    if (mouseX >= 620 && mouseX <= 1070 && mouseY >= 655 && mouseY <= 690) {
       if (isDemoMode) {
         isDemoMode = false;
-        currentUiState = UI_STATE_PORT_SELECT;
+        currentUiState = UI_STATE_AWAITING_PROFILE;
       } else {
         sendSystemResetCmd();
       }
@@ -967,6 +1214,17 @@ void mousePressed() {
 }
 
 void keyPressed() {
+  // Tecla 'R' para reinicio rapido y retorno al menu de perfiles
+  if (key == 'r' || key == 'R') {
+    if (isDemoMode) {
+      isDemoMode = false;
+      currentUiState = UI_STATE_AWAITING_PROFILE;
+    } else {
+      sendSystemResetCmd();
+    }
+    return;
+  }
+
   if (key == 'd' || key == 'D') {
     startDemoMode(1);
     return;
@@ -1032,20 +1290,21 @@ void sendSetProfileCmd(int profileId) {
 }
 
 void sendSystemResetCmd() {
-  if (serialPort == null) return;
+  if (serialPort != null) {
+    byte[] pkt = new byte[6];
+    pkt[0] = (byte)PREAMBLE_0;
+    pkt[1] = (byte)PREAMBLE_1;
+    pkt[2] = (byte)MSG_CMD_SYSTEM_RESET;
+    pkt[3] = (byte)0; // Longitud = 0 bytes
 
-  byte[] pkt = new byte[6];
-  pkt[0] = (byte)PREAMBLE_0;
-  pkt[1] = (byte)PREAMBLE_1;
-  pkt[2] = (byte)MSG_CMD_SYSTEM_RESET;
-  pkt[3] = (byte)0; // Longitud = 0 bytes
+    int chk = calculateFletcher16(pkt, 2, 2);
+    pkt[4] = (byte)(chk & 0xFF);
+    pkt[5] = (byte)((chk >> 8) & 0xFF);
 
-  int chk = calculateFletcher16(pkt, 2, 2);
-  pkt[4] = (byte)(chk & 0xFF);
-  pkt[5] = (byte)((chk >> 8) & 0xFF);
-
-  serialPort.write(pkt);
-  println("Enviado CMD_SYSTEM_RESET");
+    serialPort.write(pkt);
+    println("Enviado CMD_SYSTEM_RESET al ESP32");
+  }
+  isDemoMode = false;
   currentUiState = UI_STATE_AWAITING_PROFILE;
 }
 
