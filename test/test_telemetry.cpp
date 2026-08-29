@@ -227,6 +227,10 @@ void test_fdir_manager() {
     // 3. Probar limites de velocidad angular y deteccion de anomalias
     drivers::InertialScaledData extreme_rate_data{};
     extreme_rate_data.gyro_dps[0] = 500.0f; // Supera la escala completa de 250 dps de DRONE_HOVER
+    bool valid_sample = FDIRManager::process_sample(extreme_rate_data, 0.005f, health_flags);
+    assert(valid_sample == false);
+    assert((health_flags.load() & HEALTH_FLAG_ANOMALY_DETECTED) != 0);
+
     // 4. Probar desenganche automatico de anomalias (tras 20 muestras nominales limpias)
     for (int i = 0; i < 20; ++i) {
         // Generar pequenas variaciones reales para no disparar detector de estancamiento

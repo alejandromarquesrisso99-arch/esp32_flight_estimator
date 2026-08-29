@@ -87,7 +87,7 @@ bool FDIRManager::process_sample(const drivers::InertialScaledData& scaled, floa
             sample_valid = false;
         }
     } else {
-        s_stuck_samples_count = 0;
+        s_stuck_samples_count = 1;
         s_sensor_stuck = false;
     }
 
