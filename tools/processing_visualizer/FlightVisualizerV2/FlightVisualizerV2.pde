@@ -909,173 +909,164 @@ void drawRocketExhaustPlume(float x, float y, float z) {
 }
 
 /**
- * Modelo 3D: Misil Tactico de Alta Maniobra (Perfil 4: MISSILE_HIGH_G)
- * Estetica militar tactica y sigilosa (estilo Meteor / AIM-120D / Aster / Interceptor Hipersonico)
- * Esquema de color oscuro y discreto: gris grafito RAM, cupula de busqueda optica/IR con lente de zafiro,
- * bandas tacticas discretas, aletas longitudinales cruciformes de gran cuerda y tobera de propulsor solido.
+ * Modelo 3D: Misil Aire-Aire Tactico de Alta Maniobra (Perfil 4: MISSILE_HIGH_G)
+ * Estilo misil aire-aire supersonico interceptor (AIM-120 AMRAAM / Meteor / AIM-9X / IRIS-T)
+ * Fuselaje esbelto y alargado, colores oscuros militares discretos (gris grafito tactico RAM),
+ * aletas triangulares en cruz cruciforme delante (canards) y detras (cola), cupula optica de punteria
+ * y propulsion supersonica con penacho de llama azul electrico y diamantes de choque.
  */
 void drawHighGManeuverMissileModel() {
   // 1. Ejes de referencia discretos de trayectoria / proa / estribor
   strokeWeight(2);
-  stroke(255, 45, 55, 180); line(0, 0, 0, 0, 0, -125); // Eje longitudinal de trayectoria (-Z Processing)
-  stroke(45, 255, 90, 180); line(0, 0, 0, 50, 0, 0);    // Eje transversal (+X Processing)
-  stroke(45, 120, 255, 180); line(0, 0, 0, 0, 50, 0);   // Eje vertical (+Y Processing)
+  stroke(255, 45, 55, 180); line(0, 0, 0, 0, 0, -145); // Eje longitudinal de trayectoria (-Z Processing)
+  stroke(45, 255, 90, 180); line(0, 0, 0, 45, 0, 0);    // Eje transversal (+X Processing)
+  stroke(45, 120, 255, 180); line(0, 0, 0, 0, 45, 0);   // Eje vertical (+Y Processing)
 
-  // 2. Radomo y Cupula de Busqueda / Autodirector (Seeker Head: Z = -110 a Z = -75)
-  // Ventana optica de zafiro / sensor IR frontal
-  fill(18, 22, 28);
+  // 2. Cupula Frontal y Autodirector Aire-Aire (Seeker Nose: Z = -135 a Z = -100)
+  // Sensor infrarrojo / optico frontal
+  fill(16, 20, 25);
+  stroke(45, 52, 62);
+  strokeWeight(1);
+  pushMatrix();
+  translate(0, 0, -125);
+  rotateX(HALF_PI);
+  drawCylinder(0.8f, 3.2f, 18, 20);
+  popMatrix();
+
+  // Lente de zafiro frontal con destello discreto
+  fill(160, 200, 240, 220);
+  noStroke();
+  pushMatrix();
+  translate(0, 0, -133.5f);
+  sphere(1.0f);
+  popMatrix();
+
+  // Ojiva aerodinamica frontal de baja resistencia (Radomo ceramico grafito)
+  fill(28, 32, 38);
   stroke(50, 58, 68);
   strokeWeight(1);
   pushMatrix();
-  translate(0, 0, -104);
+  translate(0, 0, -108);
   rotateX(HALF_PI);
-  drawCylinder(0.8f, 4.0f, 12, 18);
+  drawCylinder(3.2f, 6.0f, 16, 22);
   popMatrix();
 
-  // Revestimiento antirreflectante de lente IR frontal (Punta ambar/oro discreta)
-  fill(185, 140, 35, 200);
-  noStroke();
-  pushMatrix();
-  translate(0, 0, -109.5f);
-  sphere(1.2f);
-  popMatrix();
-
-  // Radomo ceramico ojival aerodinamico (Gris oscuro tactico RAM)
-  fill(32, 36, 44);
+  // 3. Seccion Delantera de Guiado y Aletas Delanteras en Cruz (Canards: Z = -100 a Z = -65)
+  fill(36, 40, 48);
   stroke(55, 62, 72);
-  strokeWeight(1);
   pushMatrix();
-  translate(0, 0, -88);
+  translate(0, 0, -85);
   rotateX(HALF_PI);
-  drawCylinder(4.0f, 8.5f, 20, 22);
+  drawCylinder(6.0f, 6.0f, 30, 22);
   popMatrix();
 
-  // 3. Seccion de Cabeza de Guerra y Guiado (Warhead & Guidance: Z = -75 a Z = -45)
-  fill(38, 43, 50);
-  stroke(58, 66, 76);
-  pushMatrix();
-  translate(0, 0, -60);
-  rotateX(HALF_PI);
-  drawCylinder(8.5f, 8.5f, 30, 22);
-  popMatrix();
-
-  // Banda tactica amarilla discreta de cabeza de combate (High Explosive)
-  fill(180, 145, 25);
+  // Banda tactica amarilla de ojiva de combate (High Explosive)
+  fill(175, 140, 25);
   noStroke();
   pushMatrix();
-  translate(0, 0, -66);
+  translate(0, 0, -96);
   rotateX(HALF_PI);
-  drawCylinder(8.65f, 8.65f, 1.8f, 22);
+  drawCylinder(6.15f, 6.15f, 1.5f, 22);
   popMatrix();
 
-  // Tubo Pitot y sensor de presion hipersonico
-  fill(140, 150, 165);
-  pushMatrix();
-  translate(0, -9.0f, -70);
-  rotateX(HALF_PI);
-  drawCylinder(0.4f, 0.4f, 8.0f, 8);
-  popMatrix();
+  // 4 ALETAS DELANTERAS EN CRUZ CRUCIFORME (Canards de Control de Guiado Rapido en Z = -85)
+  drawTriangularAeroFin(0, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
+  drawTriangularAeroFin(HALF_PI, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
+  drawTriangularAeroFin(PI, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
+  drawTriangularAeroFin(PI + HALF_PI, 6.0f, -85, 16.0f, 12.0f, 10.0f, 1.2f, color(24, 28, 34), color(65, 75, 90));
 
-  // 4. Fuselaje Principal / Motor Cohete Solido (Solid Rocket Motor: Z = -45 a Z = +55)
-  fill(34, 38, 45);
-  stroke(52, 60, 70);
+  // 4. Fuselaje Alargado Principal / Motor Cohete Solido (Solid Rocket Motor: Z = -65 a Z = +55)
+  fill(32, 36, 42);
+  stroke(50, 58, 68);
   strokeWeight(1);
   pushMatrix();
-  translate(0, 0, 5);
+  translate(0, 0, -5);
   rotateX(HALF_PI);
-  drawCylinder(8.5f, 8.5f, 100, 22);
+  drawCylinder(6.0f, 6.0f, 120, 22);
   popMatrix();
 
-  // Banda tactica marron discreta de propulsante solido (Rocket Motor)
-  fill(130, 70, 28);
+  // Banda tactica marron de motor cohete (Rocket Motor)
+  fill(125, 68, 25);
   noStroke();
   pushMatrix();
-  translate(0, 0, -40);
+  translate(0, 0, -58);
   rotateX(HALF_PI);
-  drawCylinder(8.65f, 8.65f, 1.8f, 22);
+  drawCylinder(6.15f, 6.15f, 1.5f, 22);
   popMatrix();
 
-  // Conductos longitudinales dorsales y ventrales
-  fill(24, 28, 34);
-  pushMatrix(); translate(0, -8.7f, 5); box(1.6f, 0.9f, 96); popMatrix();
-  pushMatrix(); translate(0, 8.7f, 5);  box(1.6f, 0.9f, 96); popMatrix();
+  // Conductos longitudinales de cableado tactico dorsales y ventrales
+  fill(22, 26, 32);
+  pushMatrix(); translate(0, -6.15f, -5); box(1.3f, 0.6f, 115); popMatrix();
+  pushMatrix(); translate(0, 6.15f, -5);  box(1.3f, 0.6f, 115); popMatrix();
 
-  // 5. Aletas Cruciformes Centrales de Gran Cuerda (Mid-Body Strakes: Z = -25 a Z = +30)
-  // 4 aletas largas de titanio para alta sustentacion y maniobras a altos factores G
-  drawTriangularAeroFin(0, 8.5f, 2.5f, 55.0f, 9.0f, 38.0f, 1.2f, color(28, 32, 38), color(65, 75, 88));
-  drawTriangularAeroFin(HALF_PI, 8.5f, 2.5f, 55.0f, 9.0f, 38.0f, 1.2f, color(28, 32, 38), color(65, 75, 88));
-  drawTriangularAeroFin(PI, 8.5f, 2.5f, 55.0f, 9.0f, 38.0f, 1.2f, color(28, 32, 38), color(65, 75, 88));
-  drawTriangularAeroFin(PI + HALF_PI, 8.5f, 2.5f, 55.0f, 9.0f, 38.0f, 1.2f, color(28, 32, 38), color(65, 75, 88));
-
-  // 6. Seccion de Actuadores y Aletas de Control de Cola (Aft Control Fins: Z = +55 a Z = +75)
+  // 5. Seccion de Cola y 4 ALETAS TRASERAS EN CRUZ (Aft Tail Fins: Z = +55 a Z = +78)
   fill(26, 30, 36);
-  stroke(48, 55, 65);
-  strokeWeight(1);
+  stroke(46, 54, 64);
   pushMatrix();
-  translate(0, 0, 65);
+  translate(0, 0, 66);
   rotateX(HALF_PI);
-  drawCylinder(8.5f, 8.0f, 20, 22);
+  drawCylinder(6.0f, 5.5f, 22, 22);
   popMatrix();
 
-  // 4 Aletas de Control Activo Traseras en Cruz (Control Fins)
-  drawTriangularAeroFin(0, 8.0f, 65, 20.0f, 14.0f, 14.0f, 1.4f, color(22, 26, 32), color(75, 85, 100));
-  drawTriangularAeroFin(HALF_PI, 8.0f, 65, 20.0f, 14.0f, 14.0f, 1.4f, color(22, 26, 32), color(75, 85, 100));
-  drawTriangularAeroFin(PI, 8.0f, 65, 20.0f, 14.0f, 14.0f, 1.4f, color(22, 26, 32), color(75, 85, 100));
-  drawTriangularAeroFin(PI + HALF_PI, 8.0f, 65, 20.0f, 14.0f, 14.0f, 1.4f, color(22, 26, 32), color(75, 85, 100));
+  // 4 ALETAS TRASERAS EN CRUZ CRUCIFORME (Aletas de Estabilizacion y Maniobra en Z = +65)
+  drawTriangularAeroFin(0, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
+  drawTriangularAeroFin(HALF_PI, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
+  drawTriangularAeroFin(PI, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
+  drawTriangularAeroFin(PI + HALF_PI, 5.8f, 65, 26.0f, 16.0f, 18.0f, 1.4f, color(22, 25, 30), color(70, 80, 95));
 
-  // 7. Tobera de Expansion del Motor Cohete (Aft Nozzle: Z = +75 a Z = +83)
+  // 6. Tobera de Propulsion de Popa (Z = +77 a Z = +85)
   pushMatrix();
-  translate(0, 0, 79);
+  translate(0, 0, 81);
   rotateX(HALF_PI);
-  fill(45, 42, 40);
-  stroke(25, 22, 20);
+  fill(38, 36, 35);
+  stroke(22, 20, 18);
   strokeWeight(0.8f);
-  drawCylinder(5.0f, 6.8f, 8.0f, 16);
+  drawCylinder(3.6f, 4.8f, 7.0f, 16);
 
-  // Interior incandescente del motor cohete tactico
-  fill(255, 130, 30);
+  // Nucleo incandescente de plasma de la tobera
+  fill(0, 200, 255);
   noStroke();
   pushMatrix();
-  translate(0, -2.0f, 0);
-  drawCylinder(4.2f, 3.2f, 3.0f, 14);
+  translate(0, -1.8f, 0);
+  drawCylinder(3.0f, 2.2f, 2.5f, 14);
   popMatrix();
   popMatrix();
 
-  // 8. Llama Supersonica de Propulsion Tactica
-  drawMissileExhaustPlume(0, 0, 83);
+  // 7. Llama y Penacho de Propulsion Azul Electrico Supersonico
+  drawMissileExhaustPlume(0, 0, 85);
 }
 
 void drawMissileExhaustPlume(float x, float y, float z) {
-  float flicker = sin(frameCount * 0.6f) * 3.0f + random(-1.5f, 1.5f);
-  float plumeLen = 50.0f + flicker;
+  float flicker = sin(frameCount * 0.65f) * 3.5f + random(-1.5f, 1.5f);
+  float plumeLen = 60.0f + flicker;
 
   pushMatrix();
   translate(x, y, z);
 
-  // Llama exterior conica tactica naranja/dorada
+  // Llama exterior conica azul electrico / cian translucida
   noStroke();
-  fill(255, 110, 20, 160);
+  fill(0, 140, 255, 160);
   pushMatrix();
   translate(0, 0, plumeLen * 0.45f);
   rotateX(HALF_PI);
-  drawCylinder(5.5f, 0.6f, plumeLen, 14);
+  drawCylinder(4.2f, 0.4f, plumeLen, 14);
   popMatrix();
 
   // Nucleo hipersonico blanco-azulado de alta temperatura
-  fill(240, 248, 255, 230);
+  fill(215, 242, 255, 230);
   pushMatrix();
   translate(0, 0, plumeLen * 0.25f);
   rotateX(HALF_PI);
-  drawCylinder(3.2f, 0.4f, plumeLen * 0.5f, 12);
+  drawCylinder(2.4f, 0.3f, plumeLen * 0.5f, 12);
   popMatrix();
 
-  // Diamantes de choque compactos (2 conos supersonicos)
-  fill(0, 210, 255, 220);
-  for (int d = 1; d <= 2; d++) {
+  // Diamantes de choque supersonicos en cian brillante
+  fill(0, 255, 240, 230);
+  for (int d = 1; d <= 3; d++) {
     pushMatrix();
     translate(0, 0, d * 11.0f + flicker * 0.2f);
     rotateX(HALF_PI);
-    drawCylinder(2.2f - d * 0.5f, 0.3f, 5.5f, 8);
+    drawCylinder(1.8f - d * 0.4f, 0.2f, 5.0f, 8);
     popMatrix();
   }
 
